@@ -27,10 +27,10 @@ geometry = piomatter.Geometry(
 
 # Image (shapes) should display on the top-left corner
 canvas = Image.new("RGB", (width, height), (0, 0, 0))
-draw = ImageDraw.draw(canvas)
+draw = ImageDraw.Draw(canvas)
 
 framebuffer = np.asarray(canvas) + 0  # Mutable copy
-matrix = piomatter.Piomatter(
+matrix = piomatter.PioMatter(
     colorspace=piomatter.Colorspace.RGB888Packed,
     pinout=piomatter.Pinout.AdafruitMatrixBonnet,
     framebuffer=framebuffer,

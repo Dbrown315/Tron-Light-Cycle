@@ -24,7 +24,7 @@ height = 32  # Vary between 32 or 64
 geometry = piomatter.Geometry(width=width, height=height, n_addr_lines=4)
 framebuffer = np.zeros((height, width, 3), dtype=np.uint8)
 
-matrix = piomatter.Piomatter(
+matrix = piomatter.PioMatter(
     colorspace=piomatter.RGB888Packed,
     pinout=piomatter.AdafruitMatrixBonnet,
     framebuffer=framebuffer,
