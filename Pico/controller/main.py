@@ -1,6 +1,7 @@
 from buttons import get_button_press
 import time
 
+# This script tests the button press functionality. It counts the number of times each button is pressed until a total of 20 presses is reached.
 counts = {
     "UP": 0,
     "DOWN": 0,
@@ -10,9 +11,11 @@ counts = {
 
 total = 0
 
+# Wait for the user to press buttons until a total of 20 presses is reached.
 while total < 20:
     direction = get_button_press()
 
+    # If a button was pressed, increment the count for that button and the total count.
     if direction is not None:
         counts[direction] += 1
         total += 1
