@@ -38,3 +38,10 @@ import main
 ```
 
 Alternatively, soft-reset the board and run `import main` again.
+
+## BLE button latency
+
+Run `main.py` on the Pico and `python3 Pi/ble_receiver.py` on the Pi. Press a
+controller button; the Pico console reports estimated one-way delivery latency
+and the running average based on the acknowledgment round trip. See
+[Pi/README.md](../../Pi/README.md).
