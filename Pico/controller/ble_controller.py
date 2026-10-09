@@ -2,6 +2,7 @@
 import bluetooth
 import time
 from micropython import const
+from config import SETTINGS
 
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
@@ -12,12 +13,8 @@ _FLAG_NOTIFY = const(0x0010)
 _FLAG_WRITE = const(0x0008)
 _ACK = const(0xFE)
 
-SERVICE_UUID = bluetooth.UUID(
-    "12345678-1234-5678-1234-56789abcdef0"
-)
-INPUT_UUID = bluetooth.UUID(
-    "12345678-1234-5678-1234-56789abcdef1"
-)
+SERVICE_UUID = bluetooth.UUID(SETTINGS["SERVICE_UUID"])
+INPUT_UUID = bluetooth.UUID(SETTINGS["INPUT_UUID"])
 
 COMMANDS = {
     "UP": 1,
@@ -49,10 +46,10 @@ latency_total_ms = 0
 
 
 def advertise():
-    name = b"TRON-P1"
+    name = SETTINGS["DEVICE_NAME"].encode()
     payload = bytes((len(name) + 1, 0x09)) + name
     ble.gap_advertise(100_000, adv_data=payload)
-    print("Advertising TRON-P1")
+    print("Advertising", SETTINGS["DEVICE_NAME"])
 
 
 def irq(event, data):

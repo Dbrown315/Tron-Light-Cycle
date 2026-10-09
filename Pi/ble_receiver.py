@@ -1,9 +1,10 @@
 
 import asyncio
 from bleak import BleakClient, BleakScanner
+from config import SETTINGS
 
-DEVICE_NAME = "TRON-P1"
-INPUT_UUID = "12345678-1234-5678-1234-56789abcdef1"
+DEVICE_NAME = SETTINGS["DEVICE_NAME"]
+INPUT_UUID = SETTINGS["INPUT_UUID"]
 ACK = 0xFE
 
 COMMANDS = {

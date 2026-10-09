@@ -1,12 +1,13 @@
 from machine import Pin
 import time
+from config import SETTINGS
 
 # Change number to match GPIO pin number. Does not go by physical pin number on the board.
 BUTTONS = {
-    "UP": Pin(0, Pin.IN, Pin.PULL_UP),
-    "DOWN": Pin(1, Pin.IN, Pin.PULL_UP),
-    "LEFT": Pin(2, Pin.IN, Pin.PULL_UP),
-    "RIGHT": Pin(3, Pin.IN, Pin.PULL_UP),
+    "UP": Pin(int(SETTINGS["GPIO_UP"]), Pin.IN, Pin.PULL_UP),
+    "DOWN": Pin(int(SETTINGS["GPIO_DOWN"]), Pin.IN, Pin.PULL_UP),
+    "LEFT": Pin(int(SETTINGS["GPIO_LEFT"]), Pin.IN, Pin.PULL_UP),
+    "RIGHT": Pin(int(SETTINGS["GPIO_RIGHT"]), Pin.IN, Pin.PULL_UP),
 }
 
 DEBOUNCE_TIME = 50 # ms
