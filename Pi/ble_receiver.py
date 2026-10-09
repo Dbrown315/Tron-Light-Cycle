@@ -4,6 +4,7 @@ from bleak import BleakClient, BleakScanner
 
 DEVICE_NAME = "TRON-P1"
 INPUT_UUID = "12345678-1234-5678-1234-56789abcdef1"
+ACK = 0xFE
 
 COMMANDS = {
     1: "UP",
@@ -13,18 +14,23 @@ COMMANDS = {
 }
 
 
-def handle_input(sender, data):
-    if len(data) != 1:
-        print("Invalid packet length:", len(data))
-        return
+def make_handler(client):
+    async def handle_input(sender, data):
+        if len(data) != 5:
+            print("Invalid packet length:", len(data))
+            return
 
-    direction = COMMANDS.get(data[0])
+        direction = COMMANDS.get(data[0])
 
-    if direction is None:
-        print("Unknown command:", data[0])
-        return
+        if direction is None:
+            print("Unknown command:", data[0])
+            return
 
-    print("Received:", direction)
+        print("Received:", direction)
+        ack = bytes((ACK, data[0])) + bytes(data[1:5])
+        await client.write_gatt_char(INPUT_UUID, ack, response=True)
+
+    return handle_input
 
 
 async def main():
@@ -44,9 +50,7 @@ async def main():
             async with BleakClient(device) as client:
                 print("Connected to controller")
 
-                await client.start_notify(
-                    INPUT_UUID, handle_input
-                )
+                await client.start_notify(INPUT_UUID, make_handler(client))
 
                 while client.is_connected:
                     await asyncio.sleep(0.1)
