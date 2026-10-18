@@ -27,7 +27,10 @@ Connect each button between its GPIO pin and GND. The GPIO numbers in the code r
    import main
    ```
 
-`main.py` counts recognized button presses until it reaches 20, then prints the totals and returns to the REPL. Pressing a button is recognized after it has remained down for the debounce interval; the code waits for release before reporting it.
+`main.py` continuously polls the buttons. A press is reported after the input is
+stable for 20 ms, while the button is still held. Debouncing does not pause the
+polling loop or wait for release; holding a button produces one command, and a
+new command requires a debounced release followed by another press.
 
 Because `main` is cached after import, entering `import main` again in the same REPL session will not rerun it. To run another round without a soft reset, use:
 
