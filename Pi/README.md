@@ -1,5 +1,32 @@
 ﻿# Raspberry Pi BLE
 
+## Check Bluetooth LE on the Pi
+
+The Pi's Bluetooth adapter must be powered on before the receiver can find the
+Pico controllers. Check the adapter and whether Bluetooth is blocked:
+
+```bash
+bluetoothctl show
+rfkill list bluetooth
+```
+
+In `bluetoothctl show`, confirm that an adapter is listed and `Powered: yes` is
+shown. In the `rfkill` output, confirm Bluetooth is not blocked. If it is
+blocked or powered off, run:
+
+```bash
+sudo rfkill unblock bluetooth
+sudo systemctl enable --now bluetooth
+bluetoothctl power on
+bluetoothctl show
+```
+
+If `bluetoothctl show` reports no controller, check that Bluetooth is enabled
+in Raspberry Pi OS and that the Pi has rebooted after any configuration change.
+The receiver needs the BlueZ Bluetooth service and a working adapter.
+
+## Run the receiver
+
 Run `ble_receiver.py` to receive button directions, expose each command on an
 `asyncio.Queue` as `(player_id, direction)`, and acknowledge each press for the
 Pico's latency measurement. Its standalone consumer prints queued commands in
