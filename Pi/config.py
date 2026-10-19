@@ -3,10 +3,10 @@
 from pathlib import Path
 
 DEFAULTS = {
-    "DEVICE_NAME": "TRON-P1",
+    "DEVICE_NAME_P1": "TRON-P1",
+    "DEVICE_NAME_P2": "TRON-P2",
     "SERVICE_UUID": "12345678-1234-5678-1234-56789abcdef0",
     "INPUT_UUID": "12345678-1234-5678-1234-56789abcdef1",
-    "PLAYER_ID": "P1",
 }
 
 

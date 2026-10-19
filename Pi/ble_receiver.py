@@ -4,9 +4,13 @@ import asyncio
 
 from config import SETTINGS
 
-DEVICE_NAME = SETTINGS["DEVICE_NAME"]
 INPUT_UUID = SETTINGS["INPUT_UUID"]
-PLAYER_ID = SETTINGS.get("PLAYER_ID", "P1")
+
+CONTROLLERS = {
+    SETTINGS["DEVICE_NAME_P1"]: "P1",
+    SETTINGS["DEVICE_NAME_P2"]: "P2",
+}
+
 ACK = 0xFE
 
 COMMANDS = {
@@ -30,7 +34,7 @@ def parse_packet(data):
     return direction, packet[1:5]
 
 
-def make_handler(client, input_queue, player_id=PLAYER_ID):
+def make_handler(client, input_queue, player_id="P1"):
     """Create a Bleak notification callback that validates, queues, and ACKs."""
     async def handle_input(sender, data):
         try:
@@ -64,29 +68,51 @@ async def run_receiver(input_queue):
     # importable for tests and other game-side consumers without BLE hardware.
     from bleak import BleakClient, BleakScanner
 
-    while True:
-        try:
-            print("Searching for", DEVICE_NAME + "...")
-            device = await BleakScanner.find_device_by_name(
-                DEVICE_NAME, timeout=10.0
-            )
-            if device is None:
-                print("Controller not found")
-                await asyncio.sleep(2)
-                continue
+    connection_tasks = {}
 
+    async def connect_controller(device, player_id):
+        task = asyncio.current_task()
+        try:
             async with BleakClient(device) as client:
-                print("Connected to controller")
+                print("Connected", player_id, "to", device.name)
                 await client.start_notify(
-                    INPUT_UUID, make_handler(client, input_queue)
+                    INPUT_UUID,
+                    make_handler(client, input_queue, player_id=player_id),
                 )
                 while client.is_connected:
                     await asyncio.sleep(0.1)
         except Exception as error:
-            print("BLE error:", error)
+            print("BLE error for", player_id, ":", error)
+        finally:
+            if connection_tasks.get(player_id) is task:
+                del connection_tasks[player_id]
+            print("Disconnected", player_id, "retrying discovery...")
 
-        print("Retrying connection...")
-        await asyncio.sleep(2)
+    def on_device_detected(device, advertisement_data):
+        device_name = advertisement_data.local_name or device.name
+        player_id = CONTROLLERS.get(device_name)
+        if player_id is None or player_id in connection_tasks:
+            return
+
+        print("Found", player_id, "controller", device_name)
+        connection_tasks[player_id] = asyncio.create_task(
+            connect_controller(device, player_id)
+        )
+
+    while True:
+        try:
+            print("Scanning for controllers:", ", ".join(CONTROLLERS))
+            async with BleakScanner(detection_callback=on_device_detected):
+                while True:
+                    await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            for task in connection_tasks.values():
+                task.cancel()
+            await asyncio.gather(*connection_tasks.values(), return_exceptions=True)
+            raise
+        except Exception as error:
+            print("BLE scanner error:", error)
+            await asyncio.sleep(2)
 
 
 async def main():
