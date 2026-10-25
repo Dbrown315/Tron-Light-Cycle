@@ -1,6 +1,6 @@
 # Tron Light Cycles
 
-Repository for Senior Design 2, Team 2.
+Repository for Senior Design 2, Team 9.
 
 **Authors:** David Brown, Justin Guthrie, Cooper Johnson, Emmanuel Nwokedi
 
