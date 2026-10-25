@@ -20,14 +20,17 @@ Connect each button between its GPIO pin and GND. The GPIO numbers in the code r
 1. Connect the Pico over USB and open this folder in VS Code.
 2. Use the MicroPico extension to connect to the Pico.
 3. If this folder has not been initialized before, run **MicroPico: Initialize MicroPico project**. The `.micropico` marker is in this folder.
-4. Run **MicroPico: Upload project to Pico** to copy `main.py` and `buttons.py` to the board.
+4. Run **MicroPico: Upload project to Pico** to copy the controller files, including `config.py`, `ble_controller.py`, and `settings.env`, to the board.
 5. In the MicroPico terminal, enter:
 
    ```python
    import main
    ```
 
-`main.py` counts recognized button presses until it reaches 20, then prints the totals and returns to the REPL. Pressing a button is recognized after it has remained down for the debounce interval; the code waits for release before reporting it.
+`main.py` continuously polls the buttons. A press is reported after the input is
+stable for 20 ms, while the button is still held. Debouncing does not pause the
+polling loop or wait for release; holding a button produces one command, and a
+new command requires a debounced release followed by another press.
 
 Because `main` is cached after import, entering `import main` again in the same REPL session will not rerun it. To run another round without a soft reset, use:
 
@@ -38,3 +41,11 @@ import main
 ```
 
 Alternatively, soft-reset the board and run `import main` again.
+
+## BLE button latency
+
+Run `main.py` on the Pico and `python3 Pi/ble_receiver.py` on the Pi. Press a
+controller button; the Pico console reports estimated one-way delivery latency
+and the running average based on the acknowledgment round trip. See
+[Pi/README.md](../../Pi/README.md) for editing GPIO and BLE settings in
+`settings.env`.
