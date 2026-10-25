@@ -13,6 +13,7 @@ From the repository root (virtual environment):
 source ~/venvs/tron_venv/bin/activate
 python3 -m unittest discover -s Tests -v
 python3 -m Game.simulator
+python3 -m Game.matrix_test
 ```
 
 Controls: Player 1 (W/A/S/D); Player 2(arrow keys);
