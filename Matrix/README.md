@@ -3,14 +3,15 @@
 Repository for Senior Design 2, Team 9.
 
 ## Project Contents
-- `Matrix/Game` - Game engine setup and simulation of game play design.
+- `Matrix/Game` - Game engine setup, simulation of game play design and 
+                  matrix rendering.
 - `Matrix/Tests` - Unit test cases for testing collision logic and game logic.
 
 From the repository root (virtual environment):
 
 ```bash
 source ~/venvs/tron_venv/bin/activate
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s Tests -v
 python3 -m Game.simulator
 ```
 
@@ -24,4 +25,5 @@ Rules:
     - First to three wins;
     - Draws score zero.
     - Round counter counts attempted rounds and can exceed five after draws.
+
 
