@@ -1,0 +1,12 @@
+# BLE controller receiver (Pi/ble_receiver.py)
+bleak
+
+# GUI and simulator (GUI/display.py, Matrix/Game/simulator.py)
+pygame
+
+# Raspberry Pi 5 LED matrix programs (Matrix/)
+numpy
+Pillow
+adafruit-blinka
+click
+Adafruit-Blinka-Raspberry-Pi5-Piomatter
