@@ -20,10 +20,10 @@ Controls: Player 1 (W/A/S/D); Player 2(arrow keys);
 Space (next round/new match); ESC (quit).
 
 Rules:
-    - No reverse turns;
-    - Simultaneous cell movement;
-    - Wall/Trail/Head-on collisions;
-    - First to three wins;
+    - No reverse turns
+    - Simultaneous cell movement
+    - Wall/Trail/Head-on collisions
+    - First to three wins
     - Draws score zero.
     - Round counter counts attempted rounds and can exceed five after draws.
 
