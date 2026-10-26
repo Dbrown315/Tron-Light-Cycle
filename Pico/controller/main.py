@@ -1,29 +1,12 @@
+
+from ble_controller import send_direction
 from buttons import get_button_press
 import time
 
-counts = {
-    "UP": 0,
-    "DOWN": 0,
-    "LEFT": 0,
-    "RIGHT": 0
-}
-
-total = 0
-
-while total < 20:
+while True:
     direction = get_button_press()
 
     if direction is not None:
-        counts[direction] += 1
-        total += 1
-        print(f"Button {direction} pressed. Total presses: {total}")
+        send_direction(direction)
 
     time.sleep_ms(2)
-
-
-print("\nTEST COMPLETE")
-
-for direction, count in counts.items():
-    print(f"{direction}: {count} presses")
-
-print(f"Total presses: {total}")
