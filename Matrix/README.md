@@ -14,6 +14,9 @@ source ~/venvs/tron_venv/bin/activate
 python3 -m unittest discover -s Tests -v
 python3 -m Game.simulator
 python3 -m Game.matrix_test
+python3 -m unittest discover -s Tests -v
+python3 -m Game.matrix_game --simulate
+python3 -m Game.matrix_game --ticks 8 --p1 blue --p2 orange
 ```
 
 Controls: Player 1 (W/A/S/D); Player 2(arrow keys);
