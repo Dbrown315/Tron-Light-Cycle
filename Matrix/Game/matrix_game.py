@@ -10,6 +10,7 @@ import pygame
 
 from .engine import Direction, Engine
 from .frame_builder import build_frame
+from .round_effects import result_frame
 
 KEYS = {
     pygame.K_w: (0, Direction.UP),
@@ -77,20 +78,28 @@ def run(ticks=8, colors=("blue", "orange"), simulate=False):
                             engine.restart_match()
                         next_tick = time.monotonic() + 1 / ticks
                         last_finished = False
+                        finish_time = None
                     elif event.key == pygame.K_r:
                         engine.restart_match()
                         next_tick = time.monotonic() + 1 / ticks
                         last_finished = False
+                        finish_time = None
             now = time.monotonic()
             if not engine.finished and now >= next_tick:
                 engine.step()
                 next_tick = now + 1 / ticks
             if engine.finished and not last_finished:
                 print(
-                    f"Round finished. Winner: {engine.winner}; scores: {engine.scores}; match winner: {engine.match_winner}"
+                    f"Round {engine.round_number} finished. Winner: {engine.winner}; scores: {engine.scores}; match winner: {engine.match_winner}"
                 )
+                finish_time = time.monotonic()
                 last_finished = True
-            renderer.show_pixels(build_frame(engine, colors))
+            frame = build_frame(engine, colors)
+            if engine.finished and finish_time is not None:
+                frame = result_frame(
+                    frame, engine.winner, time.monotonic() - finish_time
+                )
+            renderer.show_pixels(frame)
             clock.tick(30)
     finally:
         renderer.clear()

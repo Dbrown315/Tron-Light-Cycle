@@ -38,6 +38,7 @@ class Engine:
         ]
         self.trails = [{r.pos} for r in self.riders]
         self.finished = False
+        self._turned_this_tick = [False, False]
         self.winner = None  # None represents a draw for a round.
 
     def turn(self, player, direction):
@@ -48,13 +49,14 @@ class Engine:
         ):
             return False
         rider = self.riders[player]
-        if not rider.alive:
+        if not rider.alive or self._turned_this_tick[player]:
             return False
         old = rider.direction.value
         new = direction.value
         if (old[0] + new[0], old[1] + new[1]) == (0, 0):
             return False
         rider.direction = direction
+        self._turned_this_tick[player] = True
         return True
 
     def step(self):
@@ -78,12 +80,12 @@ class Engine:
             if rider.alive:
                 rider.pos = destinations[i]
                 self.trails[i].add(rider.pos)
+        self._turned_this_tick = [False, False]
         if any(crashed):
             self.finished = True
             if crashed[0] != crashed[1]:
                 self.winner = 1 if crashed[0] else 0
                 self.scores[self.winner] += 1
-            self.round_number += 1
         return self.winner
 
     @property
@@ -93,6 +95,7 @@ class Engine:
     def next_round(self):
         if not self.finished or self.match_winner is not None:
             return False
+        self.round_number += 1
         self.reset_round()
         return True
 
