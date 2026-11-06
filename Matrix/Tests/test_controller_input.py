@@ -2,7 +2,7 @@
 import asyncio
 import unittest
 
-from Game.controller_input import drain_controller_inputs
+from Game.controller_input import advance_round, drain_controller_inputs
 from Game.engine import Direction, Engine
 from Pi.ble_receiver import ACK, make_handler
 
@@ -58,3 +58,69 @@ class ControllerInputTests(unittest.IsolatedAsyncioTestCase):
         drain_controller_inputs(engine, queue)
         self.assertEqual(engine.riders[0].direction, Direction.RIGHT)
         self.assertTrue(queue.empty())
+
+
+class ActionInputTests(unittest.TestCase):
+    def drain(self, engine, *events, **kwargs):
+        queue = asyncio.Queue()
+        for event in events:
+            queue.put_nowait(event)
+        advanced = drain_controller_inputs(engine, queue, **kwargs)
+        self.assertTrue(queue.empty())
+        self.assertEqual(queue._unfinished_tasks, 0)
+        return advanced
+
+    def test_either_player_can_advance_and_scores_are_preserved(self):
+        for player in ("P1", "P2"):
+            with self.subTest(player=player):
+                engine = Engine()
+                engine.finished = True
+                engine.scores = [1, 2]
+                engine.round_number = 4
+                self.assertTrue(self.drain(engine, (player, "A")))
+                self.assertFalse(engine.finished)
+                self.assertEqual(engine.scores, [1, 2])
+                self.assertEqual(engine.round_number, 4)
+
+    def test_match_restart_and_duplicate_actions(self):
+        engine = Engine()
+        engine.finished = True
+        engine.scores = [3, 2]
+        engine.round_number = 6
+        self.assertTrue(self.drain(engine, ("P1", "A"), ("P2", "A")))
+        self.assertEqual(engine.scores, [0, 0])
+        self.assertEqual(engine.round_number, 1)
+        self.assertFalse(engine.finished)
+
+    def test_actions_during_play_do_not_change_game(self):
+        engine = Engine()
+        engine.scores = [1, 0]
+        self.assertFalse(self.drain(engine, ("P1", "A"), ("P2", "B")))
+        self.assertEqual(engine.scores, [1, 0])
+        self.assertEqual(engine.riders[0].direction, Direction.RIGHT)
+        self.assertEqual(engine.riders[1].direction, Direction.LEFT)
+
+    def test_b_and_unknown_player_cannot_advance(self):
+        engine = Engine()
+        engine.finished = True
+        self.assertFalse(self.drain(engine, ("P1", "B"), ("unknown", "A")))
+        self.assertTrue(engine.finished)
+
+    def test_directions_before_and_after_a_are_stale(self):
+        engine = Engine()
+        engine.finished = True
+        self.assertTrue(self.drain(engine, ("P1", "UP"), ("P2", "A"),
+                                   ("P2", "DOWN")))
+        self.assertEqual(engine.riders[0].direction, Direction.RIGHT)
+        self.assertEqual(engine.riders[1].direction, Direction.LEFT)
+
+    def test_space_then_a_cannot_advance_twice_or_apply_stale_directions(self):
+        engine = Engine()
+        engine.finished = True
+        engine.scores = [3, 1]
+        self.assertTrue(advance_round(engine))
+        self.assertFalse(self.drain(engine, ("P1", "A"), ("P1", "UP"),
+                                    discard_directions=True))
+        self.assertFalse(advance_round(engine))
+        self.assertEqual(engine.riders[0].direction, Direction.RIGHT)
+        self.assertEqual(engine.scores, [0, 0])

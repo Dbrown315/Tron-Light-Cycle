@@ -23,12 +23,13 @@ Do not run `Pi/ble_receiver.py` separately while playing: the simulator runs its
 own receiver and needs to connect to the controllers itself.
 
 Controls: Player 1 (W/A/S/D); Player 2 (arrow keys);
-Space (next round/new match); ESC (quit).
+A on either controller or Space (next round/new match); ESC (quit).
 BLE direction buttons use the same turn rules as keyboard directions. Both
 sources remain active; keyboard events are processed first, followed by queued
-controller commands in arrival order each frame. Commands received between
-rounds are discarded. Space still advances rounds; A/B buttons and GUI navigation
-are not part of this integration.
+controller commands in arrival order each frame. Direction commands received between
+rounds are discarded. A advances a finished round or starts a new match after
+three wins; A does nothing during active play. B is received but has no assigned
+action. Controller-driven GUI navigation remains future work.
 
 For keyboard-only testing, disable BLE discovery:
 

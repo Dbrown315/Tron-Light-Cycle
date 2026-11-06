@@ -21,32 +21,34 @@ COMMANDS = {
     2: "DOWN",
     3: "LEFT",
     4: "RIGHT",
+    5: "A",
+    6: "B",
 }
 
 
 def parse_packet(data):
-    """Return (direction, Pico timestamp bytes) or raise ValueError."""
+    """Return (button, Pico timestamp bytes) or raise ValueError."""
     packet = bytes(data)
     if len(packet) != 5:
         raise ValueError("expected 5 bytes, received {}".format(len(packet)))
 
-    direction = COMMANDS.get(packet[0])
-    if direction is None:
+    button = COMMANDS.get(packet[0])
+    if button is None:
         raise ValueError("unknown command byte {}".format(packet[0]))
 
-    return direction, packet[1:5]
+    return button, packet[1:5]
 
 
 def make_handler(client, input_queue, player_id="P1"):
     """Create a Bleak notification callback that validates, queues, and ACKs."""
     async def handle_input(sender, data):
         try:
-            direction, timestamp = parse_packet(data)
+            button, timestamp = parse_packet(data)
         except (TypeError, ValueError) as error:
             print("Ignoring malformed button packet:", error)
             return
 
-        input_queue.put_nowait((player_id, direction))
+        input_queue.put_nowait((player_id, button))
         ack = bytes((ACK, data[0])) + timestamp
         try:
             await client.write_gatt_char(INPUT_UUID, ack, response=True)
@@ -59,9 +61,9 @@ def make_handler(client, input_queue, player_id="P1"):
 async def consume_input_queue(input_queue):
     """Standalone consumer for checking queue order without a game engine."""
     while True:
-        player_id, direction = await input_queue.get()
+        player_id, button = await input_queue.get()
         try:
-            print("Input:", player_id, direction)
+            print("Input:", player_id, button)
         finally:
             input_queue.task_done()
 

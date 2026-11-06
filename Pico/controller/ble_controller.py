@@ -21,6 +21,8 @@ COMMANDS = {
     "DOWN": 2,
     "LEFT": 3,
     "RIGHT": 4,
+    "A": 5,
+    "B": 6,
 }
 
 ble = bluetooth.BLE()
@@ -84,8 +86,8 @@ ble.irq(irq)
 advertise()
 
 
-def send_direction(direction):
-    command = COMMANDS.get(direction)
+def send_button(button):
+    command = COMMANDS.get(button)
     if command is None:
         return
 
@@ -98,4 +100,9 @@ def send_direction(direction):
             conn_handle, input_handle, payload
         )
 
-    print("Sent:", direction)
+    print("Sent:", button)
+
+
+def send_direction(direction):
+    """Compatibility entry point for existing direction callers."""
+    send_button(direction)

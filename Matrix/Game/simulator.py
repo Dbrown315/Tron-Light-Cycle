@@ -18,10 +18,10 @@ if REPO_ROOT not in sys.path:
 
 try:
     from .engine import Engine, Direction
-    from .controller_input import drain_controller_inputs
+    from .controller_input import advance_round, drain_controller_inputs
 except ImportError:
     from engine import Engine, Direction
-    from controller_input import drain_controller_inputs
+    from controller_input import advance_round, drain_controller_inputs
 
 CELL = 9
 COLORS = ((65, 220, 255), (255, 95, 170))
@@ -73,9 +73,7 @@ async def game_loop(input_queue):
         frame_start = loop.time()
         dt = min(frame_start - previous_frame, 0.1)
         previous_frame = frame_start
-        # Clear round-over input before Space can start another round.
-        if engine.finished:
-            drain_controller_inputs(engine, input_queue, discard=True)
+        round_was_finished = engine.finished
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -83,17 +81,19 @@ async def game_loop(input_queue):
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 elif event.key == pygame.K_SPACE:
-                    if engine.match_winner is not None:
-                        engine.restart_match()
-                    else:
-                        engine.next_round()
-                    accumulator = 0
+                    if advance_round(engine):
+                        accumulator = 0
+                        dt = 0
                 elif event.key in KEYS:
                     player, direction = KEYS[event.key]
                     engine.turn(player, direction)
         if not running:
             break
-        drain_controller_inputs(engine, input_queue)
+        if drain_controller_inputs(
+            engine, input_queue, discard_directions=round_was_finished
+        ):
+            accumulator = 0
+            dt = 0
         if not engine.finished:
             accumulator += dt
             while accumulator >= 0.13 and not engine.finished:
@@ -113,7 +113,7 @@ async def game_loop(input_queue):
                 )
         status = f"P1 {engine.scores[0]} - {engine.scores[1]} P2 | Round {engine.round_number}"
         if engine.finished:
-            status += "   |   SPACE: next round / new match"
+            status += " | A/SPACE: next round/match"
         screen.blit(
             font.render(status, True, (220, 235, 245)), (8, engine.size * CELL + 14)
         )
