@@ -2,7 +2,10 @@
 
 import asyncio
 
-from config import SETTINGS
+if __package__:
+    from .config import SETTINGS
+else:
+    from config import SETTINGS
 
 INPUT_UUID = SETTINGS["INPUT_UUID"]
 
@@ -99,20 +102,22 @@ async def run_receiver(input_queue):
             connect_controller(device, player_id)
         )
 
-    while True:
-        try:
-            print("Scanning for controllers:", ", ".join(CONTROLLERS))
-            async with BleakScanner(detection_callback=on_device_detected):
-                while True:
-                    await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            for task in connection_tasks.values():
-                task.cancel()
-            await asyncio.gather(*connection_tasks.values(), return_exceptions=True)
-            raise
-        except Exception as error:
-            print("BLE scanner error:", error)
-            await asyncio.sleep(2)
+    try:
+        while True:
+            try:
+                print("Scanning for controllers:", ", ".join(CONTROLLERS))
+                async with BleakScanner(detection_callback=on_device_detected):
+                    while True:
+                        await asyncio.sleep(1)
+            except Exception as error:
+                print("BLE scanner error:", error)
+                await asyncio.sleep(2)
+    finally:
+        # Stop all connection tasks when the scanner is stopped or an error occurs.
+        tasks = list(connection_tasks.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def main():
