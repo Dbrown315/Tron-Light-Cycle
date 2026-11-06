@@ -6,12 +6,22 @@
 
 """ """
 
+import argparse
+import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 
 import pygame
+
+REPO_ROOT = str(Path(__file__).resolve().parents[1])
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+if __package__:
+    from .navigation import MenuNavigation
+else:
+    from navigation import MenuNavigation
 
 WIDTH, HEIGHT = 1024, 600
 FPS = 30
@@ -98,8 +108,8 @@ def draw_fitted_text(surface, content, font, color, rect, align="left"):
 
 
 DEFAULT_PLAYERS = [
-    {"name": "Player A", "character": "spider", "color": "white"},
-    {"name": "Player B", "character": "dino", "color": "blue"},
+    {"name": "Player A", "character": "Spider", "color": "white"},
+    {"name": "Player B", "character": "Dino", "color": "blue"},
 ]
 
 
@@ -109,13 +119,15 @@ def load_players():
         if isinstance(data, list) and len(data) == 2:
             players = []
             for i, p in enumerate(data):
+                if not isinstance(p, dict):
+                    raise ValueError("invalid player settings")
                 players.append(
                     {
                         "name": str(p.get("name", f"Player {i+1}"))[:16],
-                        "character": (
-                            p.get("character")
-                            if p.get("character") in CHARACTERS
-                            else CHARACTERS[i]
+                        "character": next(
+                            (name for name in CHARACTERS
+                             if name.casefold() == str(p.get("character", "")).casefold()),
+                            CHARACTERS[i],
                         ),
                         "color": (
                             p.get("color") if p.get("color") in COLORS else "white"
@@ -153,11 +165,12 @@ class Button:
         return self.rect.collidepoint(pos)
 
 
-def main():
+async def gui_loop(input_queue):
     pygame.init()
     pygame.display.set_caption("TRON // Light Cycle Arena - GUI Prototype")
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-    clock = pygame.time.Clock()
+    loop = asyncio.get_running_loop()
+    navigation = MenuNavigation()
     title_font = pygame.font.SysFont("dejavusans", 30, bold=True)
     name_font = pygame.font.SysFont("dejavusans", 23, bold=True)
     sub_font = pygame.font.SysFont("dejavusans", 13, bold=True)
@@ -255,7 +268,66 @@ def main():
         )
         return result
 
+    def dispatch_action(action):
+        nonlocal players, scores, round_number, active_name, status, running
+        kind = action[0]
+        if kind == "char_prev":
+            i = action[1]
+            players[i]["character"] = CHARACTERS[
+                (CHARACTERS.index(players[i]["character"]) - 1)
+                % len(CHARACTERS)
+            ]
+            status = f"Player {i+1} character changed."
+        elif kind == "char_next":
+            i = action[1]
+            players[i]["character"] = CHARACTERS[
+                (CHARACTERS.index(players[i]["character"]) + 1)
+                % len(CHARACTERS)
+            ]
+            status = f"Player {i+1} character changed."
+        elif kind in ("color_prev", "color_next"):
+            i = action[1]
+            names = list(COLORS)
+            step = -1 if kind == "color_prev" else 1
+            players[i]["color"] = names[
+                (names.index(players[i]["color"]) + step) % len(names)
+            ]
+            status = f"Player {i+1} trail color changed."
+        elif kind == "edit_name":
+            active_name = action[1]
+            players[active_name]["name"] = ""
+            status = f"Typing name for Player {active_name+1}; press Enter to finish."
+        elif kind == "start":
+            save_players(players)
+            status = "Settings saved. Game launch is not connected yet."
+        elif kind == "play_again":
+            scores = [0, 0]
+            round_number = 1
+            status = "New match ready. Player settings retained."
+        elif kind == "restart":
+            scores = [0, 0]
+            round_number = 1
+            players = [p.copy() for p in DEFAULT_PLAYERS]
+            active_name = None
+            navigation.reset()
+            status = "Match and player settings reset to defaults."
+        elif kind == "score":
+            i = action[1]
+            if max(scores) >= 3:
+                status = "Match complete. Select PLAY AGAIN."
+            else:
+                scores[i] += 1
+                round_number = min(5, round_number + 1)
+
+                if scores[i] == 3:
+                    status = f"{players[i]['name']} wins the match"
+                else:
+                    status = f"Round awarded to {players[i]['name']}."
+        elif kind == "exit":
+            running = False
+
     while running:
+        frame_start = loop.time()
         sw, sh = screen.get_size()
         # Window size: 1024x600
         canvas = pygame.Surface((WIDTH, HEIGHT))
@@ -319,12 +391,28 @@ def main():
         for b in buttons:
             b.draw(canvas, font)
 
+        # Independent outlines remain visible when both focus the same button.
+        for player, accent in enumerate((CYAN, PINK)):
+            selected = navigation.selected_action(player)
+            for button in buttons:
+                if button.action == selected:
+                    rect = button.rect.inflate(6 + player * 8, 6 + player * 8)
+                    pygame.draw.rect(canvas, accent, rect, width=2, border_radius=8)
+                    add_text(f"P{player + 1}", (rect.right - 20, rect.top - 14),
+                             accent, small_font)
+                    break
+
+        add_text("Controllers: directions move focus | A selects | P1 cyan / P2 pink",
+                 (36, 550), MUTED, small_font)
+
         # Fit Design canvas to window
         scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
         screen.blit(scaled, (0, 0))
         pygame.display.flip()
 
         for event in pygame.event.get():
+            if not running:
+                break
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN and active_name is not None:
@@ -351,65 +439,54 @@ def main():
                 )
                 for b in buttons:
                     if b.clicked(pos):
-                        action = b.action
-                        kind = action[0]
-                        if kind == "char_prev":
-                            i = action[1]
-                            players[i]["character"] = CHARACTERS[
-                                (CHARACTERS.index(players[i]["character"]) - 1)
-                                % len(CHARACTERS)
-                            ]
-                            status = f"Player {i+1} character changed."
-                        elif kind == "char_next":
-                            i = action[1]
-                            players[i]["character"] = CHARACTERS[
-                                (CHARACTERS.index(players[i]["character"]) + 1)
-                                % len(CHARACTERS)
-                            ]
-                            status = f"Player {i+1} character changed."
-                        elif kind in ("color_prev", "color_next"):
-                            i = action[1]
-                            names = list(COLORS)
-                            step = -1 if kind == "color_prev" else 1
-                            players[i]["color"] = names[
-                                (names.index(players[i]["color"]) + step) % len(names)
-                            ]
-                            status = f"Player {i+1} trail color changed."
-                        elif kind == "edit_name":
-                            active_name = action[1]
-                            players[active_name]["name"] = ""
-                            status = f"Typing name for Player {active_name+1}; press Enter to finish."
-                        elif kind == "start":
-                            save_players(players)
-                            status = "Settings saved. Game engine integration comes in Part 2."
-                        elif kind == "play_again":
-                            scores = [0, 0]
-                            round_number = 1
-                            status = "New match ready. Player settings retained."
-                        elif kind == "restart":
-                            scores = [0, 0]
-                            round_number = 1
-                            players = [p.copy() for p in DEFAULT_PLAYERS]
-                            active_name = None
-                            status = "Match and player settings reset to defaults."
-                        elif kind == "score":
-                            i = action[1]
-                            if max(scores) >= 3:
-                                status = "Match complete. Select PLAY AGAIN."
-                            else:
-                                scores[i] += 1
-                                round_number = min(5, round_number + 1)
-
-                                if scores[i] == 3:
-                                    status = f"{players[i]['name']} wins the match"
-                                else:
-                                    status = f"Round awarded to {players[i]['name']}."
-                        elif kind == "exit":
-                            running = False
+                        dispatch_action(b.action)
                         break
 
-    pygame.quit()
-    sys.exit(0)
+        for _ in range(input_queue.qsize()):
+            if not running:
+                break
+            command = input_queue.get_nowait()
+            try:
+                action = navigation.handle(command)
+                if action is not None:
+                    dispatch_action(action)
+            finally:
+                input_queue.task_done()
+        if running:
+            await asyncio.sleep(max(0, 1 / FPS - (loop.time() - frame_start)))
+
+
+async def receive_controllers(input_queue):
+    try:
+        from Pi.ble_receiver import run_receiver
+        await run_receiver(input_queue)
+    except Exception as error:
+        print("BLE input unavailable; mouse/keyboard controls remain active:", error)
+
+
+async def run_gui(keyboard_only=False):
+    receiver = None
+    input_queue = asyncio.Queue()
+    try:
+        if not keyboard_only:
+            receiver = asyncio.create_task(receive_controllers(input_queue))
+        await gui_loop(input_queue)
+    finally:
+        if receiver is not None:
+            receiver.cancel()
+            await asyncio.gather(receiver, return_exceptions=True)
+        pygame.quit()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="TRON player settings GUI")
+    parser.add_argument("--keyboard-only", action="store_true",
+                        help="disable Bluetooth discovery; use mouse and keyboard")
+    args = parser.parse_args()
+    try:
+        asyncio.run(run_gui(keyboard_only=args.keyboard_only))
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

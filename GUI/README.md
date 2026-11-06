@@ -1,56 +1,59 @@
-# Tron Light Cycle GUI Prototype - Part 1
+# Tron Light Cycle GUI Prototype
 
-A first-stage Pygame GUI prototype for Raspberry Pi 5 and the 52Pi EP-0170 7-inch HDMI display.
+Pygame player configuration and score prototype for the Raspberry Pi 5 and
+1024×600 HDMI display.
 
-## Project Scope
+## Run
 
-This prototype includes:
-- two player name fields (click **EDIT NAME**, type, press Enter)
-- seven character choices, changed with `−` and `+`
-- eight trail colors, changed with `−` and `+`
-- two-player match scoreboard
-- Start, Play Again, Restart, and Exit
-- temporary **P1 WINS ROUND** / **P2 WINS ROUND** buttons for testing scoreboard behavior
-- saves player settings to `config/players.json` when Start is selected
-
-The round-win buttons are test controls, not game logic.
-
-## Display note
-
-The 52Pi EP-0170 is a 1024×600 HDMI monitor and does not have a touch panel according to its product documentation. Use a keyboard/mouse for this display.
-
-## Run on Raspberry Pi OS
-
-Install the `pygame` package inside a virtual environment:
+From the repository root, activate the project environment and install dependencies:
 
 ```bash
 source ~/venvs/tron_venv/bin/activate
-python3 -m pip install pygame
-python3 -c "import pygame; print(pygame.version.ver)"
+python3 -m pip install -r requirements.txt
+python3 -m GUI.display
 ```
 
-From the project root, run:
+Run from the Pi desktop. BLE discovery starts automatically for `TRON-P1` and
+`TRON-P2`, using the existing controller firmware and `Pi/settings.env` mapping.
+Do not run the standalone BLE receiver or game simulator at the same time;
+the GUI owns its BLE connections. Controllers reconnect automatically, and
+mouse/keyboard operation remains available when Bluetooth is unavailable.
+
+For mouse/keyboard operation without Bluetooth discovery:
 
 ```bash
-python3 -m pygame.examples.aliens
+python3 -m GUI.display --keyboard-only
 ```
 
-If the demo opens and closes normally, Pygame is working. Then run this prototype from its folder:
+Direct execution of `GUI/display.py` is also supported. Settings are saved in
+`config/players.json` relative to the launch directory; launch from the repository
+root to keep a consistent location.
 
-```bash
-python3 display.py
-```
+## Controls
 
-## Keyboard
+Each player has an independent highlight: cyan for P1, pink for P2. Both start
+on their own character `−` button.
 
-- Click **EDIT NAME**, type a name, press Enter to finish.
-- Escape cancels name editing.
-- Use mouse clicks on the controls.
-- Close the window or click **EXIT** to quit.
+- Left/Right moves between buttons in the selected row.
+- Up/Down moves between character `−/+`, color `−/+`, and shared controls.
+- A activates the highlighted button. B is currently unassigned.
+- Movement stops at row boundaries. Moving between rows retains the column where
+  possible; the shared row contains Start, Play Again, Restart, and Exit.
 
-## Current Limitations
+Each controller can change only its own character/color settings. Both can use
+the shared controls. Restart resets both player configurations and controller
+highlights. Shared controls preserve their existing prototype behavior:
+Start saves settings, Play Again resets scores, and Exit closes the GUI.
 
-- The GUI is not connected to the game engine or BLE controllers.
-- Character icons are represented by text labels; pixel-art sprites can be added in a later iteration.
-- Score buttons simulate round outcomes for testing.
+Mouse clicks remain available on all buttons without moving controller focus.
+Name editing requires clicking **EDIT NAME** and typing with a keyboard; Enter
+finishes and Escape stops editing. The temporary **P1 WINS ROUND** and
+**P2 WINS ROUND** buttons remain mouse-only score simulation controls.
+
+## Current limitations
+
+- Start saves settings; it does not launch the game or update simulator colors.
+- Ready/un-ready controls are not implemented yet.
+- Character choices use text labels rather than sprites.
+- Scores are simulated and are not connected to the game engine.
 - No persistent leaderboard is implemented yet.
