@@ -9,19 +9,22 @@
 import json
 import os
 import sys
+import time
+import argparse
 from pathlib import Path
 
 import pygame
 
 WIDTH, HEIGHT = 1024, 600
 FPS = 30
-CONFIG_PATH = Path("config") / "players.json"
+CONFIG_PATH = Path(__file__).resolve().parent / "config" / "players.json"
 
 BG = (5, 10, 22)
 PANEL = (12, 22, 42)
 PANEL_ALT = (9, 17, 33)
 CYAN = (54, 225, 255)
 PINK = (255, 78, 151)
+ORANGE = (255, 151, 64)
 WHITE = (238, 246, 255)
 MUTED = (139, 165, 190)
 BORDER = (35, 76, 105)
@@ -31,7 +34,7 @@ AMBER = (255, 205, 89)
 # Game Characters
 CHARACTERS = ["Spider", "Dino", "Ladybird", "Tiger", "Dragonfly", "Ant", "Butterfly"]
 
-# Game Colors: white (default)
+# Game Colors: Blue / Orange (defaults)
 COLORS = {
     "red": (255, 75, 85),
     "orange": (255, 151, 64),
@@ -49,7 +52,7 @@ def inset(rect, dx, dy):
     """
     Return a smaller rectangle with internal padding
     """
-    return pygame.Rect(rect.x + dx, rect.y + dy, rect.w - 2 * dx, rect.h - 2 * dx)
+    return pygame.Rect(rect.x + dx, rect.y + dy, rect.w - 2 * dx, rect.h - 2 * dy)
 
 
 # Equal-width columns
@@ -70,36 +73,53 @@ def draw_fitted_text(surface, content, font, color, rect, align="left"):
     """
     Draw text inside a bounded rectangle
     """
-
     rect = pygame.Rect(rect)
+    if rect.width <= 0 or rect.height <= 0:
+        return
     rendered = font.render(str(content), True, color)
 
-    if rendered.get_width() > rect.width:
-        scale = rect.width / rendered.get_with()
-        new_size = max(9, int(font.get_height() * scale))
+    if rendered.get_width() > rect.width or rendered.get_height() > rect.height:
+        factor = min(
+            rect.width / max(1, rendered.get_width()),
+            rect.height / max(1, rendered.get_height()),
+        )
+        new_size = max(8, int(font.get_height() * factor))
+        fitted = pygame.font.SysFont("dejavusans", new_size, bold=font.get_bold())
+        rendered = fitted.render(str(content), True, color)
+    destination = rendered.get_rect()
+    if align == "center":
+        destination.center = rect.center
+    elif align == "right":
+        destination.midright = rect.midright
+    else:
+        destination.midleft = rect.midleft
 
-        fitted_font = pygame.font.SysFont("dejavusans", new_size, bold=font.get_bold())
+    previous_clip = surface.get_clip()
+    surface.set_clip(rect)
+    surface.blit(rendered, destination)
+    surface.set_clip(previous_clip)
 
-        rendered = fitted_font.render(str(content), True, color)
 
-        destination = rendered.get_rect()
+# Layout is defined once, and shared by drawing and mouse hitboxes.
+LAYOUT = {
+    "header": pygame.Rect(24, 16, 976, 82),
+    "player_1": pygame.Rect(24, 110, 478, 222),
+    "player_2": pygame.Rect(510, 110, 478, 222),
+    "scoreboard": pygame.Rect(24, 344, 976, 88),
+    "status": pygame.Rect(24, 440, 976, 30),
+    "actions": pygame.Rect(24, 480, 976, 54),
+    "footer": pygame.Rect(24, 548, 976, 36),
+    "preview": pygame.Rect(686, 476, 56, 56),
+}
 
-        if align == "center":
-            destination.center = rect.center
-        elif align == "right":
-            destination.midright = rect.midright
-        else:
-            destination.midleft = rect.midleft
 
-        old_clip = surface.get_clip()
-        surface.set_clip(rect)
-        surface.blit(rendered, destination)
-        surface.set_clip(old_clip)
+def player_card(i):
+    return LAYOUT["player_1" if i == 0 else "player_2"]
 
 
 DEFAULT_PLAYERS = [
-    {"name": "Player A", "character": "spider", "color": "white"},
-    {"name": "Player B", "character": "dino", "color": "blue"},
+    {"name": "Player A", "character": "spider", "color": "blue"},
+    {"name": "Player B", "character": "dino", "color": "orange"},
 ]
 
 
@@ -113,12 +133,14 @@ def load_players():
                     {
                         "name": str(p.get("name", f"Player {i+1}"))[:16],
                         "character": (
-                            p.get("character")
-                            if p.get("character") in CHARACTERS
+                            str(p.get("character")).capitalize()
+                            if str(p.get("character", "")).capitalize() in CHARACTERS
                             else CHARACTERS[i]
                         ),
                         "color": (
-                            p.get("color") if p.get("color") in COLORS else "white"
+                            p.get("color")
+                            if p.get("color") in COLORS
+                            else DEFAULT_PLAYERS[i]["color"]
                         ),
                     }
                 )
@@ -153,10 +175,19 @@ class Button:
         return self.rect.collidepoint(pos)
 
 
-def main():
+def main(simulate=False, ticks=8):
+    # Import from Matrix/Game package;
+    repo_root = Path(__file__).resolve().parent.parent
+    matrix_dir = repo_root / "Matrix"
+    if str(matrix_dir) not in sys.path:
+        sys.path.insert(0, str(matrix_dir))
+    from Game.engine import Direction
+    from Game.session import GameSession
+
+    # Set display to 1 to view on portable inch screen
     pygame.init()
-    pygame.display.set_caption("TRON // Light Cycle Arena - GUI Prototype")
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+    pygame.display.set_caption("TRON-Light-Cycle")
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE, display=1)
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont("dejavusans", 30, bold=True)
     name_font = pygame.font.SysFont("dejavusans", 23, bold=True)
@@ -165,10 +196,34 @@ def main():
     small_font = pygame.font.SysFont("dejavusans", 13)
 
     players = load_players()
-    scores = [0, 0]
-    round_number = 1
+    renderer = None
+    if not simulate:
+        try:
+            from Game.matrix_renderer import MatrixRenderer
+
+            renderer = MatrixRenderer()
+        except Exception:
+            pygame.quit()
+            raise RuntimeError(
+                "Matrix initialization failed; check bonnet/PIO permissions, or run --simulate"
+            )
+    if players[0]["color"] == players[1]["color"]:
+        players[1]["color"] = "orange" if players[0]["color"] != "orange" else "blue"
+    session = GameSession(
+        colors=tuple(p["color"] for p in players), ticks=ticks, renderer=renderer
+    )
+    keymap = {
+        pygame.K_w: (0, Direction.UP),
+        pygame.K_d: (0, Direction.RIGHT),
+        pygame.K_s: (0, Direction.DOWN),
+        pygame.K_a: (0, Direction.LEFT),
+        pygame.K_UP: (1, Direction.UP),
+        pygame.K_RIGHT: (1, Direction.RIGHT),
+        pygame.K_DOWN: (1, Direction.DOWN),
+        pygame.K_LEFT: (1, Direction.LEFT),
+    }
     active_name = None
-    status = "Configure both riders, then select START."
+    status = "Configure riders, then START. WASD=P1, arrows=P2."
     running = True
     buttons = []
     target_surface = screen
@@ -181,236 +236,378 @@ def main():
 
     def build_buttons():
         result = []
-        # Player config controls
-        for i, x in enumerate((36, 522)):
-            accent = CYAN if i == 0 else PINK
-            result.append(
-                Button(
-                    (x + 18, 238, 38, 34), "−", ("char_prev", i), accent, font_size=20
-                )
-            )
-            result.append(
-                Button(
-                    (x + 65, 238, 38, 34), "+", ("char_next", i), accent, font_size=20
-                )
-            )
-            result.append(
-                Button(
-                    (x + 18, 294, 38, 34), "−", ("color_prev", i), accent, font_size=20
-                )
-            )
-            result.append(
-                Button(
-                    (x + 65, 294, 38, 34), "+", ("color_next", i), accent, font_size=20
-                )
+        for i in range(2):
+            card = player_card(i)
+            accent = CYAN if i == 0 else ORANGE
+            x = card.x + 18
+            result.extend(
+                [
+                    Button(
+                        (x, 225, 38, 34), "−", ("char_prev", i), accent, font_size=20
+                    ),
+                    Button(
+                        (x + 48, 225, 38, 34),
+                        "+",
+                        ("char_next", i),
+                        accent,
+                        font_size=20,
+                    ),
+                    Button(
+                        (x, 288, 38, 34), "−", ("color_prev", i), accent, font_size=20
+                    ),
+                    Button(
+                        (x + 48, 288, 38, 34),
+                        "+",
+                        ("color_next", i),
+                        accent,
+                        font_size=20,
+                    ),
+                    Button(
+                        (card.right - 134, 155, 114, 34),
+                        "EDIT NAME",
+                        ("edit_name", i),
+                        accent,
+                        PANEL_ALT,
+                        12,
+                    ),
+                ]
             )
         result.extend(
             [
-                Button((36, 474, 150, 48), "START", ("start",), CYAN, (7, 54, 72), 17),
+                Button((32, 483, 166, 48), "START", ("start",), CYAN, (7, 54, 72), 17),
                 Button(
-                    (196, 474, 150, 48),
-                    "PLAY AGAIN",
+                    (210, 483, 166, 48),
+                    "NEXT ROUND",
                     ("play_again",),
                     GREEN,
                     PANEL_ALT,
                     15,
                 ),
                 Button(
-                    (356, 474, 150, 48), "RESTART", ("restart",), AMBER, PANEL_ALT, 17
+                    (388, 483, 166, 48), "RESTART", ("restart",), AMBER, PANEL_ALT, 17
                 ),
-                Button(
-                    (516, 474, 150, 48),
-                    "P1 WINS ROUND",
-                    ("score", 0),
-                    CYAN,
-                    PANEL_ALT,
-                    13,
-                ),
-                Button(
-                    (676, 474, 150, 48),
-                    "P2 WINS ROUND",
-                    ("score", 1),
-                    PINK,
-                    PANEL_ALT,
-                    13,
-                ),
-                Button((836, 474, 150, 48), "EXIT", ("exit",), PINK, (54, 17, 37), 17),
-                Button(
-                    (36, 180, 110, 32),
-                    "EDIT NAME",
-                    ("edit_name", 0),
-                    CYAN,
-                    PANEL_ALT,
-                    12,
-                ),
-                Button(
-                    (522, 180, 110, 32),
-                    "EDIT NAME",
-                    ("edit_name", 1),
-                    PINK,
-                    PANEL_ALT,
-                    12,
-                ),
+                Button((840, 483, 148, 48), "EXIT", ("exit",), PINK, (54, 17, 37), 17),
             ]
         )
         return result
 
-    while running:
-        sw, sh = screen.get_size()
-        # Window size: 1024x600
-        canvas = pygame.Surface((WIDTH, HEIGHT))
-        target_surface = canvas
-        canvas.fill(BG)
+    try:
+        while running:
+            now = time.monotonic()
+            session.update(now)
+            for event_info in session.drain_events():
+                if event_info.kind == "ROUND_STARTED":
+                    status = f"Round {event_info.round_number}"
+                elif event_info.kind == "ROUND_FINISHED":
+                    winner = event_info.winner
+                    status = (
+                        "Round drawn. SELECT NEXT ROUND."
+                        if winner is None
+                        else f"{players[winner]["name"]} wins round {event_info.round_number}! Select NEXT ROUND."
+                    )
+                elif event_info.kind == "MATCH_FINISHED":
+                    status = f"MATCH WINNER: {players[event_info.match_winner]["name"]}! Select NEW MATCH."
+            session.show(now)
+            sw, sh = screen.get_size()
+            # Window size: 1024x600
+            canvas = pygame.Surface((WIDTH, HEIGHT))
+            target_surface = canvas
+            canvas.fill(BG)
 
-        # Subtle grid
-        for gx in range(0, WIDTH, 32):
-            pygame.draw.line(canvas, (10, 27, 45), (gx, 0), (gx, HEIGHT), 1)
-        for gy in range(0, HEIGHT, 32):
-            pygame.draw.line(canvas, (10, 27, 45), (0, gy), (WIDTH, gy), 1)
+            # Subtle grid
+            for gx in range(0, WIDTH, 32):
+                pygame.draw.line(canvas, (10, 27, 45), (gx, 0), (gx, HEIGHT), 1)
+            for gy in range(0, HEIGHT, 32):
+                pygame.draw.line(canvas, (10, 27, 45), (0, gy), (WIDTH, gy), 1)
 
-        pygame.draw.rect(canvas, PANEL, (24, 20, 976, 82), border_radius=12)
-        pygame.draw.rect(canvas, CYAN, (24, 20, 976, 82), 2, border_radius=12)
-        add_text("TRON", (44, 29), CYAN, title_font)
-        add_text("LIGHT CYCLE  //  ARENA CONTROL", (47, 68), MUTED, sub_font)
-        add_text("GUI PROTOTYPE  •  LEVEL 1", (978, 45), WHITE, sub_font, "topright")
-
-        # Player cards
-        for i, x in enumerate((24, 510)):
-            accent = CYAN if i == 0 else PINK
-            p = players[i]
-            pygame.draw.rect(canvas, PANEL, (x, 118, 478, 224), border_radius=12)
-            pygame.draw.rect(canvas, accent, (x, 118, 478, 224), 2, border_radius=12)
-            add_text(f"PLAYER {i+1}", (x + 18, 132), accent, sub_font)
-            name_rect = pygame.Rect(x + 18, 151, 280, 28)
-            add_text(p["name"], name_rect.topleft, WHITE, name_font)
-            add_text("CHARACTER", (x + 18, 222), MUTED, small_font)
-            add_text(p["character"].upper(), (x + 145, 243), WHITE, font)
-            add_text("COLOR TRAIL", (x + 18, 278), MUTED, small_font)
-            add_text(p["color"].upper(), (x + 145, 299), COLORS[p["color"]], font)
-            pygame.draw.circle(canvas, COLORS[p["color"]], (x + 424, 282), 12)
-            pygame.draw.circle(canvas, WHITE, (x + 424, 282), 12, 1)
-            add_text(
-                "Click EDIT NAME to change player name",
-                (x + 18, 316),
-                MUTED,
-                small_font,
+            header = LAYOUT["header"]
+            pygame.draw.rect(canvas, PANEL, header, border_radius=12)
+            pygame.draw.rect(canvas, CYAN, header, 2, border_radius=12)
+            draw_fitted_text(canvas, "TRON", title_font, CYAN, (44, 27, 280, 38))
+            draw_fitted_text(canvas, "LIGHT CYCLE", sub_font, MUTED, (46, 67, 310, 29))
+            draw_fitted_text(
+                canvas, "LEVEL 1", sub_font, WHITE, (830, 42, 144, 24), "right"
             )
 
-        # Scoreboard
-        pygame.draw.rect(canvas, PANEL, (24, 356, 976, 98), border_radius=12)
-        pygame.draw.rect(canvas, BORDER, (24, 356, 976, 98), 2, border_radius=12)
-        add_text("MATCH SCORE", (42, 367), MUTED, sub_font)
-        add_text(players[0]["name"], (42, 391), COLORS[players[0]["color"]], font)
-        add_text(str(scores[0]), (340, 383), COLORS[players[0]["color"]], title_font)
-        add_text("—", (485, 389), MUTED, title_font)
-        add_text(str(scores[1]), (600, 383), COLORS[players[1]["color"]], title_font)
-        add_text(players[1]["name"], (660, 391), COLORS[players[1]["color"]], font)
-        add_text(
-            f"ROUND {min(round_number, 5)} / 5", (976, 373), WHITE, sub_font, "topright"
-        )
-        if max(scores) >= 3:
-            winner = players[0]["name"] if scores[0] > scores[1] else players[1]["name"]
-            add_text(f"MATCH WINNER: {winner}", (976, 410), GREEN, sub_font, "topright")
-        else:
-            add_text("FIRST TO 3 ROUND WINS", (976, 410), MUTED, small_font, "topright")
-
-        add_text(status, (36, 450), AMBER if status else MUTED, small_font)
-        buttons = build_buttons()
-        for b in buttons:
-            b.draw(canvas, font)
-
-        # Fit Design canvas to window
-        scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
-        screen.blit(scaled, (0, 0))
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN and active_name is not None:
-                idx = active_name
-                if event.key == pygame.K_RETURN:
-                    active_name = None
-                    status = "Player name saved."
-                elif event.key == pygame.K_ESCAPE:
-                    active_name = None
-                    status = "Name edit cancelled."
-                elif event.key == pygame.K_BACKSPACE:
-                    players[idx]["name"] = players[idx]["name"][:-1]
-                elif (
-                    event.unicode
-                    and event.unicode.isprintable()
-                    and len(players[idx]["name"]) < 16
-                ):
-                    players[idx]["name"] += event.unicode
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # translate window coordinates back to 1024x600 design coordinates
-                pos = (
-                    int(event.pos[0] * WIDTH / max(1, sw)),
-                    int(event.pos[1] * HEIGHT / max(1, sh)),
+            # Player cards: independent rows for names, characters, and colors.
+            for i in range(2):
+                card = player_card(i)
+                x = card.x
+                accent = CYAN if i == 0 else ORANGE
+                p = players[i]
+                pygame.draw.rect(canvas, PANEL, card, border_radius=12)
+                pygame.draw.rect(canvas, accent, card, 2, border_radius=12)
+                draw_fitted_text(
+                    canvas, f"PLAYER {i+1}", sub_font, accent, (x + 18, 121, 160, 20)
                 )
-                for b in buttons:
-                    if b.clicked(pos):
-                        action = b.action
-                        kind = action[0]
-                        if kind == "char_prev":
-                            i = action[1]
-                            players[i]["character"] = CHARACTERS[
-                                (CHARACTERS.index(players[i]["character"]) - 1)
-                                % len(CHARACTERS)
-                            ]
-                            status = f"Player {i+1} character changed."
-                        elif kind == "char_next":
-                            i = action[1]
-                            players[i]["character"] = CHARACTERS[
-                                (CHARACTERS.index(players[i]["character"]) + 1)
-                                % len(CHARACTERS)
-                            ]
-                            status = f"Player {i+1} character changed."
-                        elif kind in ("color_prev", "color_next"):
-                            i = action[1]
-                            names = list(COLORS)
-                            step = -1 if kind == "color_prev" else 1
-                            players[i]["color"] = names[
-                                (names.index(players[i]["color"]) + step) % len(names)
-                            ]
-                            status = f"Player {i+1} trail color changed."
-                        elif kind == "edit_name":
-                            active_name = action[1]
-                            players[active_name]["name"] = ""
-                            status = f"Typing name for Player {active_name+1}; press Enter to finish."
-                        elif kind == "start":
-                            save_players(players)
-                            status = "Settings saved. Game engine integration comes in Part 2."
-                        elif kind == "play_again":
-                            scores = [0, 0]
-                            round_number = 1
-                            status = "New match ready. Player settings retained."
-                        elif kind == "restart":
-                            scores = [0, 0]
-                            round_number = 1
-                            players = [p.copy() for p in DEFAULT_PLAYERS]
-                            active_name = None
-                            status = "Match and player settings reset to defaults."
-                        elif kind == "score":
-                            i = action[1]
-                            if max(scores) >= 3:
-                                status = "Match complete. Select PLAY AGAIN."
-                            else:
-                                scores[i] += 1
-                                round_number = min(5, round_number + 1)
+                draw_fitted_text(
+                    canvas,
+                    p["name"] or "(enter name)",
+                    name_font,
+                    WHITE,
+                    (x + 18, 147, 300, 37),
+                )
+                draw_fitted_text(
+                    canvas, "CHARACTER", small_font, MUTED, (x + 18, 198, 180, 20)
+                )
+                draw_fitted_text(
+                    canvas, p["character"].upper(), font, WHITE, (x + 116, 226, 275, 32)
+                )
+                draw_fitted_text(
+                    canvas, "COLOR TRAIL", small_font, MUTED, (x + 18, 262, 180, 20)
+                )
+                draw_fitted_text(
+                    canvas,
+                    p["color"].upper(),
+                    font,
+                    COLORS[p["color"]],
+                    (x + 116, 289, 210, 32),
+                )
+                pygame.draw.circle(
+                    canvas, COLORS[p["color"]], (card.right - 42, 302), 11
+                )
+                pygame.draw.circle(canvas, WHITE, (card.right - 42, 302), 11, 1)
 
-                                if scores[i] == 3:
-                                    status = f"{players[i]['name']} wins the match"
+            # The engine controls the scores and round numbers.
+            scores = session.engine.scores
+            round_number = session.engine.round_number
+            board = LAYOUT["scoreboard"]
+            # Scoreboard
+            pygame.draw.rect(canvas, PANEL, board, border_radius=12)
+            pygame.draw.rect(canvas, BORDER, board, 2, border_radius=12)
+            draw_fitted_text(canvas, "MATCH SCORE", sub_font, MUTED, (42, 351, 230, 20))
+            draw_fitted_text(
+                canvas,
+                players[0]["name"],
+                font,
+                COLORS[players[0]["color"]],
+                (42, 380, 240, 32),
+            )
+            draw_fitted_text(
+                canvas,
+                str(scores[0]),
+                title_font,
+                COLORS[players[0]["color"]],
+                (302, 373, 68, 42),
+                "center",
+            )
+            draw_fitted_text(
+                canvas, "—", title_font, MUTED, (480, 373, 64, 42), "center"
+            )
+            draw_fitted_text(
+                canvas,
+                str(scores[1]),
+                title_font,
+                COLORS[players[1]["color"]],
+                (610, 373, 68, 42),
+                "center",
+            )
+            draw_fitted_text(
+                canvas,
+                players[1]["name"],
+                font,
+                COLORS[players[1]["color"]],
+                (694, 380, 145, 32),
+            )
+            draw_fitted_text(
+                canvas,
+                f"ROUND {round_number} · FIRST TO 3",
+                sub_font,
+                WHITE,
+                (836, 351, 146, 24),
+                "right",
+            )
+            if session.engine.match_winner is not None:
+                winner_name = players[session.engine.match_winner]["name"]
+                draw_fitted_text(
+                    canvas,
+                    f"WINNER: {winner_name}",
+                    sub_font,
+                    GREEN,
+                    (832, 386, 150, 28),
+                    "right",
+                )
+            else:
+                draw_fitted_text(
+                    canvas,
+                    "FIRST TO 3 WINS",
+                    small_font,
+                    MUTED,
+                    (832, 386, 150, 28),
+                    "right",
+                )
+            status_rect = LAYOUT["status"]
+            pygame.draw.rect(canvas, PANEL_ALT, status_rect, border_radius=6)
+            draw_fitted_text(
+                canvas, status, small_font, AMBER, inset(status_rect, 12, 4)
+            )
+
+            buttons = build_buttons()
+            for b in buttons:
+                if b.action[0] == "play_again":
+                    b.label = (
+                        "NEW MATCH" if session.phase == "match_over" else "NEXT ROUND"
+                    )
+            # Preview window of gameplay
+            preview_rect = LAYOUT["preview"]
+            preview = pygame.surfarray.make_surface(session.frame(now).swapaxes(0, 1))
+            canvas.blit(
+                pygame.transform.scale(preview, preview_rect.size), preview_rect
+            )
+            pygame.draw.rect(canvas, BORDER, preview_rect, 1)
+            draw_fitted_text(canvas, "MATRIX", small_font, MUTED, (750, 487, 80, 18))
+            draw_fitted_text(canvas, "PREVIEW", small_font, MUTED, (750, 506, 80, 18))
+            draw_fitted_text(
+                canvas,
+                "WASD: P1     ARROWS: P2     SPACE: NEXT    ESC: EXIT",
+                small_font,
+                MUTED,
+                LAYOUT["footer"],
+                "center",
+            )
+            for b in buttons:
+                b.draw(canvas, font)
+
+            # Fit Design canvas to window
+            scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
+            screen.blit(scaled, (0, 0))
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN and active_name is not None:
+                    idx = active_name
+                    if event.key == pygame.K_RETURN:
+                        active_name = None
+                        status = "Player name saved."
+                    elif event.key == pygame.K_ESCAPE:
+                        active_name = None
+                        status = "Name edit cancelled."
+                    elif event.key == pygame.K_BACKSPACE:
+                        players[idx]["name"] = players[idx]["name"][:-1]
+                    elif (
+                        event.unicode
+                        and event.unicode.isprintable()
+                        and len(players[idx]["name"]) < 16
+                    ):
+                        players[idx]["name"] += event.unicode
+                elif event.type == pygame.KEYDOWN and active_name is None:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key in keymap:
+                        player_id, direction = keymap[event.key]
+                        session.steer(player_id, direction)
+                    elif event.key == pygame.K_SPACE and session.phase in (
+                        "round_over",
+                        "match_over",
+                    ):
+                        if session.phase == "match_over":
+                            session.restart(time.monotonic())
+                        session.start(time.monotonic())
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # translate window coordinates back to 1024x600 design coordinates
+                    pos = (
+                        int(event.pos[0] * WIDTH / max(1, sw)),
+                        int(event.pos[1] * HEIGHT / max(1, sh)),
+                    )
+                    for b in buttons:
+                        if b.clicked(pos):
+                            action = b.action
+                            kind = action[0]
+                            if session.phase != "ready" and kind in (
+                                "char_prev",
+                                "char_next",
+                                "color_prev",
+                                "color_next",
+                                "edit_name",
+                            ):
+                                status = "Player settings are locked during a match. Select RESTART to edit."
+                            elif kind == "char_prev":
+                                i = action[1]
+                                players[i]["character"] = CHARACTERS[
+                                    (CHARACTERS.index(players[i]["character"]) - 1)
+                                    % len(CHARACTERS)
+                                ]
+                                status = f"Player {i+1} character changed."
+                            elif kind == "char_next":
+                                i = action[1]
+                                players[i]["character"] = CHARACTERS[
+                                    (CHARACTERS.index(players[i]["character"]) + 1)
+                                    % len(CHARACTERS)
+                                ]
+                                status = f"Player {i+1} character changed."
+                            elif kind in ("color_prev", "color_next"):
+                                i = action[1]
+                                names = list(COLORS)
+                                step = -1 if kind == "color_prev" else 1
+                                players[i]["color"] = names[
+                                    (names.index(players[i]["color"]) + step)
+                                    % len(names)
+                                ]
+                                if players[i]["color"] == players[1 - i]["color"]:
+                                    players[i]["color"] = names[
+                                        (names.index(players[i]["color"]) + step)
+                                        % len(names)
+                                    ]
+                                status = f"Player {i+1} trail color changed."
+                            elif kind == "edit_name":
+                                active_name = action[1]
+                                players[active_name]["name"] = ""
+                                status = f"Typing name for Player {active_name+1}; press Enter to finish."
+                            elif kind == "start":
+                                if session.phase == "ready":
+                                    if players[0]["color"] == players[1]["color"]:
+                                        status = "Choose different trail colors for both players."
+                                    else:
+                                        session.colors = tuple(
+                                            p["color"] for p in players
+                                        )
+                                        save_players(players)
+                                        session.start(time.monotonic())
+                                        status = "Game started on RGB matrix."
                                 else:
-                                    status = f"Round awarded to {players[i]['name']}."
-                        elif kind == "exit":
-                            running = False
-                        break
+                                    status = "Match already started; use NEXT ROUND"
+                            elif kind == "play_again":
+                                if session.phase == "match_over":
+                                    session.restart(time.monotonic())
+                                    session.start(time.monotonic())
+                                    status = "New match started; settings retained."
+                                elif session.phase == "round_over":
+                                    session.start(time.monotonic())
+                                    status = (
+                                        f"Round {session.engine.round_number} started."
+                                    )
+                                else:
+                                    status = "Finish the current round first."
+                            elif kind == "restart":
+                                players = [p.copy() for p in DEFAULT_PLAYERS]
+                                session.restart(
+                                    time.monotonic(),
+                                    colors=tuple(p["color"] for p in players),
+                                )
+                                active_name = None
+                                status = "Match and player settings reset to defaults."
+                            elif kind == "exit":
+                                running = False
+                            break
 
-    pygame.quit()
-    sys.exit(0)
+        clock.tick(FPS)
+
+    finally:
+        session.close()
+        pygame.quit()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--simulate",
+        action="store_true",
+        help="GUI and engine without phsical LED matrix",
+    )
+    parser.add_argument("--ticks", type=float, default=8)
+    args = parser.parse_args()
+    if not 0 < args.ticks <= 30:
+        parser.error("--ticks must be greater than 0 and at most 30")
+    main(simulate=args.simulate, ticks=args.ticks)
