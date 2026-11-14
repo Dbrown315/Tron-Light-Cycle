@@ -175,7 +175,7 @@ class Button:
         return self.rect.collidepoint(pos)
 
 
-def main(simulate=False, ticks=8):
+async def main(simulate=False, ticks=8, display=0, ble=False):
     # Import from Matrix/Game package;
     repo_root = Path(__file__).resolve().parent.parent
     matrix_dir = repo_root / "Matrix"
@@ -183,11 +183,13 @@ def main(simulate=False, ticks=8):
         sys.path.insert(0, str(matrix_dir))
     from Game.engine import Direction
     from Game.session import GameSession
+    from Game.input_router import route_input
+    from navigation import MenuNavigation
 
     # Set display to 1 to view on portable inch screen
     pygame.init()
     pygame.display.set_caption("TRON-Light-Cycle")
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE, display=1)
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE, display=display)
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont("dejavusans", 30, bold=True)
     name_font = pygame.font.SysFont("dejavusans", 23, bold=True)
@@ -222,6 +224,15 @@ def main(simulate=False, ticks=8):
         pygame.K_DOWN: (1, Direction.DOWN),
         pygame.K_LEFT: (1, Direction.LEFT),
     }
+    navigation = MenuNavigation()
+    ble_queue = asyncio.Queue()
+    receiver_task = None
+    if ble:
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from Pi.ble_receiver import run_receiver
+
+        receiver_task = asyncio.create_task(run_receiver(ble_queue))
     active_name = None
     status = "Configure riders, then START. WASD=P1, arrows=P2."
     running = True
@@ -291,8 +302,101 @@ def main(simulate=False, ticks=8):
         )
         return result
 
+    def dispatch_action(action):
+        nonlocal players, active_name, status, running
+        kind = action[0]
+        if session.phase != "ready" and kind in (
+            "char_prev",
+            "char_next",
+            "color_prev",
+            "color_next",
+            "edit_name",
+        ):
+            status = (
+                "Player settinngs are locked during a match. Select RESTART to edit."
+            )
+        elif kind == "char_prev":
+            i = action[1]
+            players[i]["character"] = CHARACTERS[
+                (CHARACTERS.index(players[i]["character"]) - 1) % len(CHARACTERS)
+            ]
+            status = f"Player {i+1} character changed."
+        elif kind == "char_next":
+            i = action[1]
+            players[i]["character"] = CHARACTERS[
+                (CHARACTERS.index(players[i]["character"]) + 1) % len(CHARACTERS)
+            ]
+            status = f"Player {i+1} character changed."
+        elif kind in ("color_prev", "color_next"):
+            i = action[1]
+            names = list(COLORS)
+            step = -1 if kind == "color_prev" else 1
+            players[i]["color"] = names[
+                (names.index(players[i]["color"]) + step) % len(names)
+            ]
+            if players[i]["color"] == players[1 - i]["color"]:
+                players[i]["color"] = names[(names.index(players[i]["color"]) + step) % len(names)]
+            status = f"Player {i+1} trail color changed."
+        elif kind == "edit_name":
+            active_name = action[1]
+            players[active_name]["name"] = ""
+            status = f"Typing name for Player {active_name+1}; press Enter to finish."
+        elif kind == "start":
+            if session.phase == "ready":
+                if players[0]["color"] == players[1]["color"]:
+                    status = "Choose different trail colors for both players."
+                else:
+                    session.colors = tuple(
+                        p["color"] for p in players
+                    )
+                    save_players(players)
+                    session.start(time.monotonic())
+                    status = "Game started on RGB matrix."
+            else:
+                status = "Match already started; use NEXT ROUND"
+        elif kind == "play_again":
+            if session.phase == "match_over":
+                session.restart(time.monotonic())
+                session.start(time.monotonic())
+                status = "New match started; settings retained."
+            elif session.phase == "round_over":
+                session.start(time.monotonic())
+                status = (
+                    f"Round {session.engine.round_number} started."
+                )
+            else:
+                status = "Finish the current round first."
+        elif kind == "restart":
+            players = [p.copy() for p in DEFAULT_PLAYERS]
+            session.restart(
+                time.monotonic()
+                colors=tuple(p["color"] for p in players),
+            )
+            active_name = None
+            status = "Match and player settings reset to defaults."
+        elif kind == "exit":
+            running = False
+
     try:
         while running:
+            # Let Bleak scanning, notifications and reconnection progress.
+            await asyncio.sleep(0)
+            navigation.set_phase(session.phase)
+            # Snapshot queue size: input arriving later is handled in the next frame
+            for _ in range(ble_queue.qsize()):
+                event = ble_queue.get_nowait()
+                try:
+                    if active_name is not None:
+                        # TODO: On-screen name entry
+                        continue
+                    action = route_input(
+                        event, session.phase, navigation,
+                        lambda player, direction: session.steer(player, Direction[direction]),
+                    )
+                    if action is not None:
+                        dispatch_action(action)
+                finally:
+                    ble_queue.task_done()
             now = time.monotonic()
             session.update(now)
             for event_info in session.drain_events():
@@ -467,6 +571,11 @@ def main(simulate=False, ticks=8):
             )
             for b in buttons:
                 b.draw(canvas, font)
+                if ble and active_name is not None and session.phase != "playing":
+                    for player_idx, position in enumerate(navigation.positions):
+                        if b.action == navigation.selected_action(player_idx):
+                            accent = CYAN if player_idx == 0 else ORANGE
+                            pygame.draw.rect(canvas, accent, b.rect.inflate(6,6), 2, border_radius=8)
 
             # Fit Design canvas to window
             scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
@@ -515,86 +624,15 @@ def main(simulate=False, ticks=8):
                         if b.clicked(pos):
                             action = b.action
                             kind = action[0]
-                            if session.phase != "ready" and kind in (
-                                "char_prev",
-                                "char_next",
-                                "color_prev",
-                                "color_next",
-                                "edit_name",
-                            ):
-                                status = "Player settings are locked during a match. Select RESTART to edit."
-                            elif kind == "char_prev":
-                                i = action[1]
-                                players[i]["character"] = CHARACTERS[
-                                    (CHARACTERS.index(players[i]["character"]) - 1)
-                                    % len(CHARACTERS)
-                                ]
-                                status = f"Player {i+1} character changed."
-                            elif kind == "char_next":
-                                i = action[1]
-                                players[i]["character"] = CHARACTERS[
-                                    (CHARACTERS.index(players[i]["character"]) + 1)
-                                    % len(CHARACTERS)
-                                ]
-                                status = f"Player {i+1} character changed."
-                            elif kind in ("color_prev", "color_next"):
-                                i = action[1]
-                                names = list(COLORS)
-                                step = -1 if kind == "color_prev" else 1
-                                players[i]["color"] = names[
-                                    (names.index(players[i]["color"]) + step)
-                                    % len(names)
-                                ]
-                                if players[i]["color"] == players[1 - i]["color"]:
-                                    players[i]["color"] = names[
-                                        (names.index(players[i]["color"]) + step)
-                                        % len(names)
-                                    ]
-                                status = f"Player {i+1} trail color changed."
-                            elif kind == "edit_name":
-                                active_name = action[1]
-                                players[active_name]["name"] = ""
-                                status = f"Typing name for Player {active_name+1}; press Enter to finish."
-                            elif kind == "start":
-                                if session.phase == "ready":
-                                    if players[0]["color"] == players[1]["color"]:
-                                        status = "Choose different trail colors for both players."
-                                    else:
-                                        session.colors = tuple(
-                                            p["color"] for p in players
-                                        )
-                                        save_players(players)
-                                        session.start(time.monotonic())
-                                        status = "Game started on RGB matrix."
-                                else:
-                                    status = "Match already started; use NEXT ROUND"
-                            elif kind == "play_again":
-                                if session.phase == "match_over":
-                                    session.restart(time.monotonic())
-                                    session.start(time.monotonic())
-                                    status = "New match started; settings retained."
-                                elif session.phase == "round_over":
-                                    session.start(time.monotonic())
-                                    status = (
-                                        f"Round {session.engine.round_number} started."
-                                    )
-                                else:
-                                    status = "Finish the current round first."
-                            elif kind == "restart":
-                                players = [p.copy() for p in DEFAULT_PLAYERS]
-                                session.restart(
-                                    time.monotonic(),
-                                    colors=tuple(p["color"] for p in players),
-                                )
-                                active_name = None
-                                status = "Match and player settings reset to defaults."
-                            elif kind == "exit":
-                                running = False
+                            dispatch_action(action)
                             break
 
-        clock.tick(FPS)
+        await asyncio.sleep(max(0.001, 1.0 / FPS - (time.monotonic() - now)))
 
     finally:
+        if receiver_task is not None:
+            receiver_task.cancel()
+            await asyncio.gather(receiver_task, return_exceptions=True)
         session.close()
         pygame.quit()
 
@@ -607,7 +645,9 @@ if __name__ == "__main__":
         help="GUI and engine without phsical LED matrix",
     )
     parser.add_argument("--ticks", type=float, default=8)
+    parser.add_argument("--display", type=int, default=0, help="SDL display index (e.g. 1 for portable screen)")
+    parser.add_argument("--ble", action="store_true", help="Enable teammate BLE receiver")
     args = parser.parse_args()
     if not 0 < args.ticks <= 30:
         parser.error("--ticks must be greater than 0 and at most 30")
-    main(simulate=args.simulate, ticks=args.ticks)
+    asyncio.run(main(simulate=args.simulate, ticks=args.ticks, display=args.display, ble=args.ble))
