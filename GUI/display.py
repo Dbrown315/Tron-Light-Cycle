@@ -13,6 +13,7 @@ import time
 import argparse
 from pathlib import Path
 
+
 import pygame
 
 WIDTH, HEIGHT = 1024, 600
@@ -186,6 +187,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     from Game.input_router import route_input
     from navigation import MenuNavigation
     from name_keyboard import NameKeyboard, ROWS
+    from Game.telemetry import TelemetryRecorder
 
     # Set display to 1 to view on portable inch screen
     pygame.init()
@@ -215,6 +217,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     session = GameSession(
         colors=tuple(p["color"] for p in players), ticks=ticks, renderer=renderer
     )
+    telemetry = TelemetryRecorder(repo_root / "data" / "tron_stats.sqlite3")
     keymap = {
         pygame.K_w: (0, Direction.UP),
         pygame.K_d: (0, Direction.RIGHT),
@@ -442,7 +445,9 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     ble_queue.task_done()
             now = time.monotonic()
             session.update(now)
-            for event_info in session.drain_events():
+            new_events = session.drain_events()
+            telemetry.observe(session, new_events, [p["name"] for p in players])
+            for event_info in new_events:
                 if event_info.kind == "ROUND_STARTED":
                     status = f"Round {event_info.round_number}"
                 elif event_info.kind == "ROUND_FINISHED":
@@ -736,6 +741,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             receiver_task.cancel()
             await asyncio.gather(receiver_task, return_exceptions=True)
         session.close()
+        telemetry.close()
         pygame.quit()
 
 

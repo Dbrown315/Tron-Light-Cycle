@@ -23,6 +23,7 @@ python3 -m unittest discover -s Tests -v
 python3 GUI/display.py --simulate --display 1
 python3 GUI/display.py --simulate --display 1 --ble
 python3 GUI/display.py --ticks 8 --display 1 --ble
+#python3 -m unittest discover -s Tests -p "test_telemetry.py" -v
 ```
 
 Controls: Player 1 (W/A/S/D); Player 2(arrow keys);
