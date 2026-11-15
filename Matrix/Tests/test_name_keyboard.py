@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "GUI"))
-from name_keyboard import NameKeyboard, ROWS
+from GUI.name_keyboard import NameKeyboard, ROWS
 
 
 class NameKeyboardTests(unittest.TestCase):
