@@ -14,6 +14,7 @@ import argparse
 from pathlib import Path
 
 import pygame
+import asyncio
 
 WIDTH, HEIGHT = 1024, 600
 FPS = 30
@@ -385,7 +386,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         if name_editor is None:
             return
         if commit:
-            players[name_editor.players]["name"] = (
+            players[name_editor.player]["name"] = (
                 name_editor.value.strip() or f"Player {name_editor.player + 1}"
             )
             status = f"Player {name_editor.player + 1} name saved."
@@ -450,10 +451,10 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     status = (
                         "Round drawn. SELECT NEXT ROUND."
                         if winner is None
-                        else f"{players[winner]["name"]} wins round {event_info.round_number}! Select NEXT ROUND."
+                        else "{} wins round {}! Select NEXT ROUND.".format(players[winner]["name"], event_info.round_number)
                     )
                 elif event_info.kind == "MATCH_FINISHED":
-                    status = f"MATCH WINNER: {players[event_info.match_winner]["name"]}! Select NEW MATCH."
+                    status = "MATCH WINNER: {}! Select NEW MATCH.".format(players[event_info.match_winner]["name"])
             session.show(now)
             sw, sh = screen.get_size()
             # Window size: 1024x600
