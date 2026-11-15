@@ -16,9 +16,9 @@ pip install numpy
 pip install click
 pip install Adafruit-Blinka-Raspberry-Pi5-Piomatter
 
-# ---------------------------------
+# ------------------------------------------------------------------------------
 # PIO Subsystem Rule Configuration
-# ---------------------------------
+# ------------------------------------------------------------------------------
 # - Open a rules file using the nano text editor (from the terminal)
 # sudo nano /etc/udev/rules.d/99-com.rules
 
