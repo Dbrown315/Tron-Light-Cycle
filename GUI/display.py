@@ -185,9 +185,10 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     from Game.engine import Direction
     from Game.session import GameSession
     from Game.input_router import route_input
+    from Game.telemetry import TelemetryRecorder
+    from stats_view import leaderboard_rows, metric_rows
     from navigation import MenuNavigation
     from name_keyboard import NameKeyboard, ROWS
-    from Game.telemetry import TelemetryRecorder
 
     # Set display to 1 to view on portable inch screen
     pygame.init()
@@ -239,6 +240,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         receiver_task = asyncio.create_task(run_receiver(ble_queue))
     active_name = None
     name_editor = None
+    stats_panel = None  # None, "leaderboard", or "telemetry"
     status = "Configure riders, then START. WASD=P1, arrows=P2."
     running = True
     buttons = []
@@ -302,14 +304,23 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 Button(
                     (388, 483, 166, 48), "RESTART", ("restart",), AMBER, PANEL_ALT, 17
                 ),
+                Button(
+                    (464, 483, 106, 48), "RANKS", ("leaderboard",), CYAN, PANEL_ALT, 14
+                ),
+                Button(
+                    (578, 483, 102, 48), "STATS", ("telemetry",), GREEN, PANEL_ALT, 14
+                ),
                 Button((840, 483, 148, 48), "EXIT", ("exit",), PINK, (54, 17, 37), 17),
             ]
         )
         return result
 
     def dispatch_action(action):
-        nonlocal players, active_name, status, running
+        nonlocal players, active_name, name_editor, stats_panel, status, running
         kind = action[0]
+        if kind in ("leaderboard", "telemetry"):
+            stats_panel = kind
+            return
         if session.phase != "ready" and kind in (
             "char_prev",
             "char_next",
@@ -347,8 +358,6 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         elif kind == "edit_name":
             active_name = action[1]
             name_editor = NameKeyboard(active_name, players[active_name]["name"])
-            # players[active_name]["name"] = ""
-            # status = f"Typing name for Player {active_name+1}; press Enter to finish."
             status = f"Editing player {active_name+1}: A=select, B=delete, DONE=save."
         elif kind == "start":
             if session.phase == "ready":
@@ -388,7 +397,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         if name_editor is None:
             return
         if commit:
-            players[name_editor.players]["name"] = (
+            players[name_editor.player]["name"] = (
                 name_editor.value.strip() or f"Player {name_editor.player + 1}"
             )
             status = f"Player {name_editor.player + 1} name saved."
@@ -396,6 +405,97 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             status = "Name edit cancelled; previous name retained."
         active_name = None
         name_editor = None
+
+    def draw_stats_overlay(canvas):
+        """
+        Modal overlay; gameplay state remains the same.
+        """
+        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        shade.fill((2, 6, 14, 235))
+        canvas.blit(shade, (0, 0))
+        panel = pygame.Rect(80, 60, 864, 480)
+        pygame.draw.rect(canvas, PANEL, panel, border_radius=14)
+        pygame.draw.rect(
+            canvas,
+            CYAN if stats_panel == "leaderboard" else GREEN,
+            panel,
+            2,
+            border_radius=14,
+        )
+        draw_fitted_text(
+            canvas,
+            "LEADERBOARD" if stats_panel == "leaderboard" else "GAME TELEMETRY",
+            title_font,
+            WHITE,
+            (110, 78, 590, 40),
+        )
+        tabs = [
+            ("RANKS", "leaderboard", pygame.Rect(110, 129, 130, 40)),
+            ("STATS", "telemetry", pygame.Rect(250, 129, 130, 40)),
+            ("CLOSE", "close", pygame.Rect(770, 82, 138, 40)),
+        ]
+        for label, mode, rect in tabs:
+            pygame.draw.rect(
+                canvas,
+                (22, 75, 95) if mode == stats_panel else PANEL_ALT,
+                rect,
+                border_radius=7,
+            )
+            pygame.draw.rect(
+                canvas,
+                CYAN if mode == stats_panel else BORDER,
+                rect,
+                2,
+                border_radius=7,
+            )
+            draw_fitted_text(canvas, label, sub_font, WHITE, rect, "center")
+        if stats_panel == "leaderboard":
+            headers = [
+                ("#", 110, 42),
+                ("PLAYER", 158, 235),
+                ("MATCH W", 415, 100),
+                ("MATCH L", 526, 100),
+                ("ROUND W", 637, 100),
+                ("PLAYED", 752, 110),
+            ]
+            for title, x, width in headers:
+                draw_fitted_text(canvas, title, sub_font, MUTED, (x, 184, width, 24))
+            rows = leaderboard_rows(telemetry.leaderboard(limit=8))
+            if not rows:
+                draw_fitted_text(
+                    canvas,
+                    "No completed matches yet. Finish a match to appear here.",
+                    font,
+                    MUTED,
+                    (120, 248, 770, 45),
+                    "center",
+                )
+            for index, row in enumerate(rows):
+                y = 215 + index * 34
+                if index % 2 == 0:
+                    pygame.draw.rect(
+                        canvas, PANEL_ALT, (106, y - 2, 800, 32), border_radius=4
+                    )
+                for value, (_, x, width) in zip(row, headers):
+                    draw_fitted_text(canvas, value, font, WHITE, (x, y, width, 26))
+        else:
+            data = metric_rows(telemetry.metrics())
+            for index, (label, value) in enumerate(data):
+                y = 199 + index * 43
+                pygame.draw.rect(canvas, PANEL_ALT, (115, y, 790, 36), border_radius=5)
+                draw_fitted_text(canvas, label, font, MUTED, (134, y + 4, 495, 28))
+                draw_fitted_text(
+                    canvas, value, name_font, GREEN, (660, y + 3, 215, 30), "right"
+                )
+        draw_fitted_text(
+            canvas,
+            "PICO: LEFT/RIGHT switch views • A/B close    |    ESC close",
+            small_font,
+            MUTED,
+            (112, 502, 790, 22),
+            "center",
+        )
+        return tabs
 
     def keyboard_cells():
         # Overlay occupies the middle  of the screen and is independent of game
@@ -422,7 +522,17 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             for _ in range(ble_queue.qsize()):
                 event = ble_queue.get_nowait()
                 try:
-                    if active_name is not None:
+                    if stats_panel is not None:
+                        if isinstance(event, (tuple, list)) and len(event) == 2:
+                            button = event[1]
+                            if button == "LEFT":
+                                stats_panel = "leaderboard"
+                            elif button == "RIGHT":
+                                stats_panel = "telemetry"
+                            elif button in ("A", "B"):
+                                stats_panel = None
+                        continue
+                    if name_editor is not None:
                         # TODO: [X] - On-screen name entry
                         if isinstance(event, (tuple, list)) and len(event) == 2:
                             player_id, button = event
@@ -682,6 +792,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     (120, 480, 780, 23),
                     "center",
                 )
+            stats_tabs = draw_stats_overlay(canvas) if stats_panel is not None else []
 
             # Fit Design canvas to window
             scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
@@ -692,7 +803,6 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN and name_editor is not None:
-                    # idx = active_name
                     if event.key == pygame.K_RETURN:
                         finish_name(True)
                     elif event.key == pygame.K_ESCAPE:
@@ -701,6 +811,13 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                         name_editor.handle("B")
                     elif event.unicode:
                         name_editor.type_character(event.unicode)
+                elif event.type == pygame.KEYDOWN and stats_panel is not None:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        stats_panel = None
+                    elif event.key == pygame.K_LEFT:
+                        stats_panel = "leaderboard"
+                    elif event.key == pygame.K_RIGHT:
+                        stats_panel = "telemetry"
                 elif event.type == pygame.KEYDOWN and active_name is None:
                     if event.key == pygame.K_ESCAPE:
                         running = False
@@ -720,7 +837,12 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                         int(event.pos[0] * WIDTH / max(1, sw)),
                         int(event.pos[1] * HEIGHT / max(1, sh)),
                     )
-                    if name_editor is not None:
+                    if stats_panel is not None:
+                        for _, mode, rect in stats_tabs:
+                            if rect.collidepoint(pos):
+                                stats_panel = None if mode == "close" else mode
+                                break
+                    elif name_editor is not None:
                         for row_i, col_i, key, cell in keyboard_cells():
                             if cell.collidepoint(pos):
                                 name_editor.row, name_editor.col = row_i, col_i
@@ -740,8 +862,8 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         if receiver_task is not None:
             receiver_task.cancel()
             await asyncio.gather(receiver_task, return_exceptions=True)
-        session.close()
         telemetry.close()
+        session.close()
         pygame.quit()
 
 
