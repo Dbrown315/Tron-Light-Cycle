@@ -185,6 +185,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     from Game.session import GameSession
     from Game.input_router import route_input
     from navigation import MenuNavigation
+    from name_keyboard import NameKeyboard, ROWS
 
     # Set display to 1 to view on portable inch screen
     pygame.init()
@@ -234,6 +235,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
 
         receiver_task = asyncio.create_task(run_receiver(ble_queue))
     active_name = None
+    name_editor = None
     status = "Configure riders, then START. WASD=P1, arrows=P2."
     running = True
     buttons = []
@@ -335,20 +337,22 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 (names.index(players[i]["color"]) + step) % len(names)
             ]
             if players[i]["color"] == players[1 - i]["color"]:
-                players[i]["color"] = names[(names.index(players[i]["color"]) + step) % len(names)]
+                players[i]["color"] = names[
+                    (names.index(players[i]["color"]) + step) % len(names)
+                ]
             status = f"Player {i+1} trail color changed."
         elif kind == "edit_name":
             active_name = action[1]
-            players[active_name]["name"] = ""
-            status = f"Typing name for Player {active_name+1}; press Enter to finish."
+            name_editor = NameKeyboard(active_name, players[active_name]["name"])
+            # players[active_name]["name"] = ""
+            # status = f"Typing name for Player {active_name+1}; press Enter to finish."
+            status = f"Editing player {active_name+1}: A=select, B=delete, DONE=save."
         elif kind == "start":
             if session.phase == "ready":
                 if players[0]["color"] == players[1]["color"]:
                     status = "Choose different trail colors for both players."
                 else:
-                    session.colors = tuple(
-                        p["color"] for p in players
-                    )
+                    session.colors = tuple(p["color"] for p in players)
                     save_players(players)
                     session.start(time.monotonic())
                     status = "Game started on RGB matrix."
@@ -361,21 +365,50 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 status = "New match started; settings retained."
             elif session.phase == "round_over":
                 session.start(time.monotonic())
-                status = (
-                    f"Round {session.engine.round_number} started."
-                )
+                status = f"Round {session.engine.round_number} started."
             else:
                 status = "Finish the current round first."
         elif kind == "restart":
             players = [p.copy() for p in DEFAULT_PLAYERS]
             session.restart(
-                time.monotonic()
+                time.monotonic(),
                 colors=tuple(p["color"] for p in players),
             )
             active_name = None
+            name_editor = None
             status = "Match and player settings reset to defaults."
         elif kind == "exit":
             running = False
+
+    def finish_name(commit):
+        nonlocal active_name, name_editor, status
+        if name_editor is None:
+            return
+        if commit:
+            players[name_editor.players]["name"] = (
+                name_editor.value.strip() or f"Player {name_editor.player + 1}"
+            )
+            status = f"Player {name_editor.player + 1} name saved."
+        else:
+            status = "Name edit cancelled; previous name retained."
+        active_name = None
+        name_editor = None
+
+    def keyboard_cells():
+        # Overlay occupies the middle  of the screen and is independent of game
+        # buttons. Coordinates use 1024x600 canvas units.
+        cells = []
+        for row_index, keys in enumerate(ROWS):
+            for col_index, key in enumerate(keys):
+                cells.append(
+                    (
+                        row_index,
+                        col_index,
+                        key,
+                        pygame.Rect(132 + col_index * 77, 205 + row_index * 67, 70, 56),
+                    )
+                )
+        return cells
 
     try:
         while running:
@@ -387,11 +420,21 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 event = ble_queue.get_nowait()
                 try:
                     if active_name is not None:
-                        # TODO: On-screen name entry
+                        # TODO: [X] - On-screen name entry
+                        if isinstance(event, (tuple, list)) and len(event) == 2:
+                            player_id, button = event
+                            if player_id == f"P{name_editor.player + 1}":
+                                result = name_editor.handle(button)
+                                if result in ("done", "cancel"):
+                                    finish_name(result == "done")
                         continue
                     action = route_input(
-                        event, session.phase, navigation,
-                        lambda player, direction: session.steer(player, Direction[direction]),
+                        event,
+                        session.phase,
+                        navigation,
+                        lambda player, direction: session.steer(
+                            player, Direction[direction]
+                        ),
                     )
                     if action is not None:
                         dispatch_action(action)
@@ -571,11 +614,69 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             )
             for b in buttons:
                 b.draw(canvas, font)
-                if ble and active_name is not None and session.phase != "playing":
+                if ble and active_name is None and session.phase != "playing":
                     for player_idx, position in enumerate(navigation.positions):
                         if b.action == navigation.selected_action(player_idx):
                             accent = CYAN if player_idx == 0 else ORANGE
-                            pygame.draw.rect(canvas, accent, b.rect.inflate(6,6), 2, border_radius=8)
+                            pygame.draw.rect(
+                                canvas, accent, b.rect.inflate(6, 6), 2, border_radius=8
+                            )
+
+            if name_editor is not None:
+                # Opaque overlay prevents GUI controls from being mistaken for
+                # keyboard controls.
+                shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                shade.fill((2, 6, 14, 220))
+                canvas.blit(shade, (0, 0))
+                pygame.draw.rect(canvas, PANEL, (96, 94, 832, 414), border_radius=14)
+                accent = CYAN if name_editor.player == 0 else ORANGE
+                pygame.draw.rect(
+                    canvas, accent, (96, 94, 832, 414), 2, border_radius=14
+                )
+                draw_fitted_text(
+                    canvas,
+                    f"PLAYER {name_editor.player + 1} - EDIT NAME",
+                    name_font,
+                    accent,
+                    (125, 108, 750, 37),
+                )
+                pygame.draw.rect(
+                    canvas, PANEL_ALT, (125, 151, 750, 44), border_radius=7
+                )
+                draw_fitted_text(
+                    canvas, name_editor.value + "_", font, WHITE, (140, 155, 715, 34)
+                )
+                for row_i, col_i, key, cell in keyboard_cells():
+                    focused = (row_i, col_i) == (name_editor.row, name_editor.col)
+                    pygame.draw.rect(
+                        canvas,
+                        (28, 75, 94) if focused else PANEL_ALT,
+                        cell,
+                        border_radius=7,
+                    )
+                    pygame.draw.rect(
+                        canvas,
+                        accent if focused else BORDER,
+                        cell,
+                        3 if focused else 1,
+                        border_radius=7,
+                    )
+                    draw_fitted_text(
+                        canvas,
+                        key,
+                        small_font if len(key) > 1 else font,
+                        WHITE,
+                        cell.inflate(-4, 4),
+                        "center",
+                    )
+                draw_fitted_text(
+                    canvas,
+                    "D-PAD: MOVE   A: SELECT   B: DELETE   ENTER: SAVE    ESC: CANCEL",
+                    small_font,
+                    MUTED,
+                    (120, 480, 780, 23),
+                    "center",
+                )
 
             # Fit Design canvas to window
             scaled = pygame.transform.smoothscale(canvas, (max(1, sw), max(1, sh)))
@@ -585,22 +686,16 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and active_name is not None:
-                    idx = active_name
+                elif event.type == pygame.KEYDOWN and name_editor is not None:
+                    # idx = active_name
                     if event.key == pygame.K_RETURN:
-                        active_name = None
-                        status = "Player name saved."
+                        finish_name(True)
                     elif event.key == pygame.K_ESCAPE:
-                        active_name = None
-                        status = "Name edit cancelled."
+                        finish_name(False)
                     elif event.key == pygame.K_BACKSPACE:
-                        players[idx]["name"] = players[idx]["name"][:-1]
-                    elif (
-                        event.unicode
-                        and event.unicode.isprintable()
-                        and len(players[idx]["name"]) < 16
-                    ):
-                        players[idx]["name"] += event.unicode
+                        name_editor.handle("B")
+                    elif event.unicode:
+                        name_editor.type_character(event.unicode)
                 elif event.type == pygame.KEYDOWN and active_name is None:
                     if event.key == pygame.K_ESCAPE:
                         running = False
@@ -620,12 +715,19 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                         int(event.pos[0] * WIDTH / max(1, sw)),
                         int(event.pos[1] * HEIGHT / max(1, sh)),
                     )
-                    for b in buttons:
-                        if b.clicked(pos):
-                            action = b.action
-                            kind = action[0]
-                            dispatch_action(action)
-                            break
+                    if name_editor is not None:
+                        for row_i, col_i, key, cell in keyboard_cells():
+                            if cell.collidepoint(pos):
+                                name_editor.row, name_editor.col = row_i, col_i
+                                result = name_editor.handle("A")
+                                if result in ("done", "cancel"):
+                                    finish_name(result == "done")
+                                break
+                    else:
+                        for b in buttons:
+                            if b.clicked(pos):
+                                dispatch_action(b.action)
+                                break
 
         await asyncio.sleep(max(0.001, 1.0 / FPS - (time.monotonic() - now)))
 
@@ -645,9 +747,18 @@ if __name__ == "__main__":
         help="GUI and engine without phsical LED matrix",
     )
     parser.add_argument("--ticks", type=float, default=8)
-    parser.add_argument("--display", type=int, default=0, help="SDL display index (e.g. 1 for portable screen)")
-    parser.add_argument("--ble", action="store_true", help="Enable teammate BLE receiver")
+    parser.add_argument(
+        "--display",
+        type=int,
+        default=0,
+        help="SDL display index (e.g. 1 for portable screen)",
+    )
+    parser.add_argument("--ble", action="store_true", help="Enable BLE receiver")
     args = parser.parse_args()
     if not 0 < args.ticks <= 30:
         parser.error("--ticks must be greater than 0 and at most 30")
-    asyncio.run(main(simulate=args.simulate, ticks=args.ticks, display=args.display, ble=args.ble))
+    asyncio.run(
+        main(
+            simulate=args.simulate, ticks=args.ticks, display=args.display, ble=args.ble
+        )
+    )

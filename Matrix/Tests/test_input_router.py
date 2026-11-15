@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "Matrix"), str(ROOT / "GUI")]
 from Game.input_router import route_input
-from navigation import MenuNavigation
+from GUI.navigation import MenuNavigation
 
 
 class TestInputRouter(unittest.TestCase):
