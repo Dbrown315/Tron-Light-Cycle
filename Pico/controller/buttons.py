@@ -8,6 +8,8 @@ BUTTONS = {
     "DOWN": Pin(int(SETTINGS["GPIO_DOWN"]), Pin.IN, Pin.PULL_UP),
     "LEFT": Pin(int(SETTINGS["GPIO_LEFT"]), Pin.IN, Pin.PULL_UP),
     "RIGHT": Pin(int(SETTINGS["GPIO_RIGHT"]), Pin.IN, Pin.PULL_UP),
+    "A": Pin(int(SETTINGS["GPIO_A"]), Pin.IN, Pin.PULL_UP),
+    "B": Pin(int(SETTINGS["GPIO_B"]), Pin.IN, Pin.PULL_UP),
 }
 
 DEBOUNCE_TIME = 20  # ms

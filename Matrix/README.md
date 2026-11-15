@@ -25,8 +25,40 @@ python3 GUI/display.py --simulate --display 1 --ble
 python3 GUI/display.py --ticks 8 --display 1 --ble
 ```
 
-Controls: Player 1 (W/A/S/D); Player 2(arrow keys);
-Space (next round/new match); ESC (quit).
+The simulator automatically scans for both BLE controllers while remaining
+playable with the keyboard. `TRON-P1` controls Player 1 and `TRON-P2` controls
+Player 2; these advertised names are configured in `Pi/settings.env` and each
+Pico's `settings.env`. One controller is enough to play against a keyboard player.
+Do not run `Pi/ble_receiver.py` separately while playing: the simulator runs its
+own receiver and needs to connect to the controllers itself.
+
+Controls: Player 1 (W/A/S/D); Player 2 (arrow keys);
+A on either controller or Space (next round/new match); ESC (quit).
+BLE direction buttons use the same turn rules as keyboard directions. Both
+sources remain active; keyboard events are processed first, followed by queued
+controller commands in arrival order each frame. Direction commands received between
+rounds are discarded. A advances a finished round or starts a new match after
+three wins; A does nothing during active play. B is received but has no assigned
+action. Controller-driven GUI navigation remains future work.
+
+For keyboard-only testing, disable BLE discovery:
+
+```bash
+python3 -m Matrix.Game.simulator --keyboard-only
+```
+
+Missing Bleak leaves keyboard play available. Bluetooth discovery errors are
+printed and retried; disconnected controllers are rediscovered automatically
+without pausing the game. See [Pi BLE setup](../Pi/README.md) if no controller
+connects. Connection and disconnection messages appear in the launch terminal.
+The simulator opens a Pygame window; run it from the Pi desktop. This command
+does not render gameplay on the RGB matrix.
+
+For the independent matrix hardware pattern:
+
+```bash
+python3 -m Matrix.Game.matrix_test
+```
 
 Rules:
 - No reverse turns
