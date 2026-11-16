@@ -132,7 +132,7 @@ def load_players():
             for i, p in enumerate(data):
                 players.append(
                     {
-                        "name": str(p.get("name", f"Player {i+1}"))[:16],
+                        "name": DEFAULT_PLAYERS[i]["name"],
                         "character": (
                             str(p.get("character")).capitalize()
                             if str(p.get("character", "")).capitalize() in CHARACTERS
@@ -306,7 +306,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         return result
 
     def dispatch_action(action):
-        nonlocal players, active_name, status, running
+        nonlocal players, active_name, name_editor, status, running
         kind = action[0]
         if session.phase != "ready" and kind in (
             "char_prev",
