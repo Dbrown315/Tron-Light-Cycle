@@ -4,9 +4,10 @@
 # Purpose: Feedback from RGB matrix after a round ends.
 
 import numpy as np
+from .frame_builder import COLORS
 
 
-def result_frame(base_frame, winner, elapsed):
+def result_frame(base_frame, winner, elapsed, colors=("blue", "orange")):
     """
     Pulse a border for 1.5s; winner 0/1, or None for a draw.
     """
@@ -16,9 +17,9 @@ def result_frame(base_frame, winner, elapsed):
     if int(elapsed * 5) % 2:
         return frame
     border = (
-        (90, 210, 255)
-        if winner == 0
-        else (255, 120, 65) if winner == 1 else (160, 160, 160)
+        COLORS[colors[winner]]
+        if winner in (0,1)
+        else (160, 160, 160)
     )
     frame[0, :, :] = border
     frame[-1, :, :] = border

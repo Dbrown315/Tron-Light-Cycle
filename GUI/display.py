@@ -342,6 +342,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     (names.index(players[i]["color"]) + step) % len(names)
                 ]
             status = f"Player {i+1} trail color changed."
+            session.colors = tuple(p["color"] for p in players)
         elif kind == "edit_name":
             active_name = action[1]
             name_editor = NameKeyboard(active_name, players[active_name]["name"])

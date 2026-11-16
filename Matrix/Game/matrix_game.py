@@ -97,7 +97,10 @@ def run(ticks=8, colors=("blue", "orange"), simulate=False):
             frame = build_frame(engine, colors)
             if engine.finished and finish_time is not None:
                 frame = result_frame(
-                    frame, engine.winner, time.monotonic() - finish_time
+                    frame, 
+                    engine.winner, 
+                    time.monotonic() - finish_time,
+                    colors=colors,
                 )
             renderer.show_pixels(frame)
             clock.tick(30)
