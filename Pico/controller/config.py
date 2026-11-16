@@ -8,6 +8,8 @@ DEFAULTS = {
     "GPIO_DOWN": "1",
     "GPIO_LEFT": "2",
     "GPIO_RIGHT": "3",
+    "GPIO_A": "22",
+    "GPIO_B": "21",
 }
 
 

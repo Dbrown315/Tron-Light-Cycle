@@ -11,7 +11,8 @@ Repository for Senior Design 2, Team 9.
 
 ## Pico button controller
 
-The current controller reads four buttons and counts presses until it reaches 20. It uses the Pico's internal pull-ups, so connect each button between its GPIO and GND:
+The controller continuously reads six active-low buttons and sends debounced
+presses over BLE. Connect each button between its GPIO and GND:
 
 | Button | GPIO |
 | --- | --- |
@@ -19,14 +20,13 @@ The current controller reads four buttons and counts presses until it reaches 20
 | Down | GP1 |
 | Left | GP2 |
 | Right | GP3 |
+| A | GP22 |
+| B | GP21 |
 
-To run it, connect the Pico over USB, open `Pico/controller/` in VS Code with the MicroPico extension, upload the project, then enter `import main` in the MicroPico terminal. MicroPython runs the files on the Pico; it does not compile them on the host. When the 20-press test completes, the script returns to the REPL. To run it again in the same REPL session, clear the module cache and import it again:
-
-```python
-import sys
-del sys.modules["main"]
-import main
-```
+Use the MicroPico extension to upload `Pico/controller/` to each Pico, preserving
+its `DEVICE_NAME` (`TRON-P1` or `TRON-P2`) in `settings.env`, then start `main.py`.
+Direction buttons steer the assigned player in the simulator. A advances a
+finished round or restarts a completed match; B is currently unassigned.
 
 See [Pico/controller/README.md](Pico/controller/README.md) for full setup and wiring instructions.
 

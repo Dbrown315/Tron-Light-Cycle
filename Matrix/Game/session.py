@@ -90,7 +90,11 @@ class GameSession:
     def frame(self, now):
         pixels = build_frame(self.engine, self.colors)
         if self.finished_at is not None:
-            pixels = result_frame(pixels, self.engine.winner, now - self.finished_at)
+            pixels = result_frame(pixels, 
+                                  self.engine.winner, 
+                                  now - self.finished_at,
+                                  colors=self.colors,
+                                  )
         return pixels
 
     def show(self, now):

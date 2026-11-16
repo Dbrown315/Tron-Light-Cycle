@@ -29,11 +29,11 @@ class TestInputRouter(unittest.TestCase):
 
     def test_setup_selection(self):
         self.assertEqual(
-            route_input(("P1", "A"), "ready", self.nav, self.steer), ("char_prev", 0)
+            route_input(("P1", "A"), "ready", self.nav, self.steer), ("color_prev", 0)
         )
         route_input(("P2", "RIGHT"), "ready", self.nav, self.steer)
         self.assertEqual(
-            route_input(("P2", "A"), "ready", self.nav, self.steer), ("char_next", 1)
+            route_input(("P2", "A"), "ready", self.nav, self.steer), ("color_next", 1)
         )
 
     def test_round_advance_selection(self):

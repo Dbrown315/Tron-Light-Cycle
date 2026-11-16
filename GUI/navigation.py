@@ -19,18 +19,16 @@ class MenuNavigation:
         if phase != self.phase:
             self.phase = phase
             if phase in ("round_over", "match_over"):
-                self.positions = [(3, 1), (3, 1)]
+                self.positions = [(2, 1), (2, 1)]
             elif phase == "ready":
                 self.positions = [(1, 0), (1, 0)]
 
     def selected_action(self, player):
         row, col = self.positions[player]
-        if row == 3:
+        if row == 2:
             return SHARED[col]
         if row == 0:
             return ("edit_name", player)
-        if row == 1:
-            return (("char_prev", "char_next")[col], player)
         return (("color_prev", "color_next")[col], player)
 
     def handle(self, event):
@@ -46,16 +44,16 @@ class MenuNavigation:
             return None
         row, col = self.positions[player]
         if self.phase != "ready":
-            row = 3
+            row = 2
         elif button == "UP":
             row = max(0, row - 1)
         elif button == "DOWN":
-            row = min(3, row + 1)
+            row = min(2, row + 1)
         if button == "LEFT":
             col = max(0, col - 1)
         elif button == "RIGHT":
-            col = min(3 if row == 3 else 1, col + 1)
-        col = min(col, 3 if row == 3 else 1)
+            col = min(3 if row == 2 else 1, col + 1)
+        col = min(col, 3 if row == 2 else 1)
         if row == 0:
             col = 0
         self.positions[player] = row, col

@@ -36,7 +36,7 @@ class BleReceiverTests(unittest.IsolatedAsyncioTestCase):
         await self.assert_rejected(b"\x99\x00\x00\x00\x00")
 
     async def test_valid_commands_are_queued_in_order_and_acknowledged(self):
-        expected = ["UP", "DOWN", "LEFT", "RIGHT"]
+        expected = ["UP", "DOWN", "LEFT", "RIGHT", "A", "B"]
         for command, direction in enumerate(expected, start=1):
             packet = bytes((command, command, 0, 0, 0))
             await self.handler(None, packet)
@@ -46,7 +46,7 @@ class BleReceiverTests(unittest.IsolatedAsyncioTestCase):
             queued,
             [("test-player", direction) for direction in expected],
         )
-        self.assertEqual(len(self.client.writes), 4)
+        self.assertEqual(len(self.client.writes), 6)
         for command, (_, ack, response) in enumerate(self.client.writes, start=1):
             self.assertEqual(ack, bytes((ACK, command, command, 0, 0, 0)))
             self.assertTrue(response)
@@ -58,6 +58,17 @@ class BleReceiverTests(unittest.IsolatedAsyncioTestCase):
         await self.handler(None, b"\x03\x01\x00\x00\x00")
         self.assertEqual(self.queue.get_nowait(), ("test-player", "LEFT"))
         self.assertEqual(self.client.writes[0][1], bytes((ACK, 3, 1, 0, 0, 0)))
+
+    async def test_actions_keep_player_identity_even_if_ack_fails(self):
+        class FailingClient:
+            async def write_gatt_char(self, *args, **kwargs):
+                raise OSError("test ACK failure")
+
+        for player in ("P1", "P2"):
+            handler = make_handler(FailingClient(), self.queue, player_id=player)
+            for code, button in ((5, "A"), (6, "B")):
+                await handler(None, bytes((code, 1, 2, 3, 4)))
+                self.assertEqual(self.queue.get_nowait(), (player, button))
 
 
 if __name__ == "__main__":
