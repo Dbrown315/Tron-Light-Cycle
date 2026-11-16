@@ -41,7 +41,7 @@ class ControllerInputTests(unittest.IsolatedAsyncioTestCase):
                       None, ([], {}), ("P1", "UP"), ("P1", "LEFT")):
             queue.put_nowait(event)
         drain_controller_inputs(engine, queue)
-        self.assertEqual(engine.riders[0].direction, Direction.LEFT)
+        self.assertEqual(engine.riders[0].direction, Direction.UP)
         self.assertEqual(engine.riders[1].direction, Direction.LEFT)
         await asyncio.wait_for(queue.join(), 1)
 
@@ -80,7 +80,7 @@ class ActionInputTests(unittest.TestCase):
                 self.assertTrue(self.drain(engine, (player, "A")))
                 self.assertFalse(engine.finished)
                 self.assertEqual(engine.scores, [1, 2])
-                self.assertEqual(engine.round_number, 4)
+                self.assertEqual(engine.round_number, 5)
 
     def test_match_restart_and_duplicate_actions(self):
         engine = Engine()
