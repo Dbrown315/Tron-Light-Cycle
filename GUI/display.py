@@ -191,7 +191,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     # Set display to 1 to view on portable inch screen
     pygame.init()
     pygame.display.set_caption("TRON-Light-Cycle")
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE, display=display)
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN, display=display)
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont("dejavusans", 30, bold=True)
     name_font = pygame.font.SysFont("dejavusans", 23, bold=True)
