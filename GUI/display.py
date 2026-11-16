@@ -228,13 +228,17 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
     }
     navigation = MenuNavigation()
     ble_queue = asyncio.Queue()
+    ble_status_queue = asyncio.Queue()
+    ble_connected = {"P1": False, "P2": False}
     receiver_task = None
     if ble:
         if str(repo_root) not in sys.path:
             sys.path.insert(0, str(repo_root))
         from Pi.ble_receiver import run_receiver
 
-        receiver_task = asyncio.create_task(run_receiver(ble_queue))
+        receiver_task = asyncio.create_task(
+            run_receiver(ble_queue, status_queue=ble_status_queue)
+        )
     active_name = None
     name_editor = None
     status = "Configure riders, then START. WASD=P1, arrows=P2."
@@ -257,20 +261,10 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             result.extend(
                 [
                     Button(
-                        (x, 225, 38, 34), "−", ("char_prev", i), accent, font_size=20
+                        (x, 225, 38, 34), "−", ("color_prev", i), accent, font_size=20
                     ),
                     Button(
                         (x + 48, 225, 38, 34),
-                        "+",
-                        ("char_next", i),
-                        accent,
-                        font_size=20,
-                    ),
-                    Button(
-                        (x, 288, 38, 34), "−", ("color_prev", i), accent, font_size=20
-                    ),
-                    Button(
-                        (x + 48, 288, 38, 34),
                         "+",
                         ("color_next", i),
                         accent,
@@ -309,27 +303,13 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         nonlocal players, active_name, name_editor, status, running
         kind = action[0]
         if session.phase != "ready" and kind in (
-            "char_prev",
-            "char_next",
             "color_prev",
             "color_next",
             "edit_name",
         ):
             status = (
-                "Player settinngs are locked during a match. Select RESTART to edit."
+                "Player settings are locked during a match. Select RESTART to edit."
             )
-        elif kind == "char_prev":
-            i = action[1]
-            players[i]["character"] = CHARACTERS[
-                (CHARACTERS.index(players[i]["character"]) - 1) % len(CHARACTERS)
-            ]
-            status = f"Player {i+1} character changed."
-        elif kind == "char_next":
-            i = action[1]
-            players[i]["character"] = CHARACTERS[
-                (CHARACTERS.index(players[i]["character"]) + 1) % len(CHARACTERS)
-            ]
-            status = f"Player {i+1} character changed."
         elif kind in ("color_prev", "color_next"):
             i = action[1]
             names = list(COLORS)
@@ -417,6 +397,11 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             # Let Bleak scanning, notifications and reconnection progress.
             await asyncio.sleep(0)
             navigation.set_phase(session.phase)
+            while not ble_status_queue.empty():
+                player_id, connected = ble_status_queue.get_nowait()
+                if player_id in ble_connected:
+                    ble_connected[player_id] = connected
+                ble_status_queue.task_done()
             # Snapshot queue size: input arriving later is handled in the next frame
             for _ in range(ble_queue.qsize()):
                 event = ble_queue.get_nowait()
@@ -474,11 +459,22 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             pygame.draw.rect(canvas, CYAN, header, 2, border_radius=12)
             draw_fitted_text(canvas, "TRON", title_font, CYAN, (44, 27, 280, 38))
             draw_fitted_text(canvas, "LIGHT CYCLE", sub_font, MUTED, (46, 67, 310, 29))
-            draw_fitted_text(
-                canvas, "LEVEL 1", sub_font, WHITE, (830, 42, 144, 24), "right"
-            )
+            if ble:
+                for player_id, y in (("P1", 33), ("P2", 63)):
+                    connected = ble_connected[player_id]
+                    label = f"{player_id}: {'CONNECTED' if connected else 'OFFLINE'}"
+                    draw_fitted_text(
+                        canvas, label, sub_font,
+                        GREEN if connected else MUTED,
+                        (810, y, 170, 22), "right"
+                    )
+            else:
+                draw_fitted_text(
+                    canvas, "BLE DISABLED", sub_font, MUTED,
+                    (810, 42, 170, 24), "right"
+                )
 
-            # Player cards: independent rows for names, characters, and colors.
+            # Player cards: independent name editing and color selection.
             for i in range(2):
                 card = player_card(i)
                 x = card.x
@@ -497,25 +493,19 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     (x + 18, 147, 300, 37),
                 )
                 draw_fitted_text(
-                    canvas, "CHARACTER", small_font, MUTED, (x + 18, 198, 180, 20)
-                )
-                draw_fitted_text(
-                    canvas, p["character"].upper(), font, WHITE, (x + 116, 226, 275, 32)
-                )
-                draw_fitted_text(
-                    canvas, "COLOR TRAIL", small_font, MUTED, (x + 18, 262, 180, 20)
+                    canvas, "COLOR TRAIL", small_font, MUTED, (x + 18, 198, 180, 20)
                 )
                 draw_fitted_text(
                     canvas,
                     p["color"].upper(),
                     font,
                     COLORS[p["color"]],
-                    (x + 116, 289, 210, 32),
+                    (x + 116, 226, 210, 32),
                 )
                 pygame.draw.circle(
-                    canvas, COLORS[p["color"]], (card.right - 42, 302), 11
+                    canvas, COLORS[p["color"]], (card.right - 42, 239), 11
                 )
-                pygame.draw.circle(canvas, WHITE, (card.right - 42, 302), 11, 1)
+                pygame.draw.circle(canvas, WHITE, (card.right - 42, 239), 11, 1)
 
             # The engine controls the scores and round numbers.
             scores = session.engine.scores

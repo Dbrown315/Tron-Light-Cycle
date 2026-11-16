@@ -10,6 +10,7 @@ class ReceiverLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_two_players_duplicate_discovery_reconnect_and_cleanup(self):
         clients = []
         ready = asyncio.Queue()
+        status = asyncio.Queue()
         callback = None
 
         class Client:
@@ -47,19 +48,25 @@ class ReceiverLifecycleTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict('sys.modules', bleak=SimpleNamespace(
             BleakClient=Client, BleakScanner=Scanner
         )):
-            receiver = asyncio.create_task(run_receiver(asyncio.Queue()))
+            receiver = asyncio.create_task(run_receiver(asyncio.Queue(), status_queue=status))
             try:
                 first = await asyncio.wait_for(ready.get(), 1)
                 await asyncio.wait_for(ready.get(), 1)
                 self.assertEqual(len(clients), 2)
+                events = {await asyncio.wait_for(status.get(), 1) for _ in range(2)}
+                self.assertEqual(events, {("P1", True), ("P2", True)})
                 first.is_connected = False
                 async def wait_closed():
                     while not first.closed:
                         await asyncio.sleep(0.01)
                 await asyncio.wait_for(wait_closed(), 1)
+                self.assertEqual(await asyncio.wait_for(status.get(), 1),
+                                 (CONTROLLERS[first.device.name], False))
                 callback(first.device, SimpleNamespace(local_name=first.device.name))
                 await asyncio.wait_for(ready.get(), 1)
                 self.assertEqual(len(clients), 3)
+                self.assertEqual(await asyncio.wait_for(status.get(), 1),
+                                 (CONTROLLERS[first.device.name], True))
             finally:
                 receiver.cancel()
                 with self.assertRaises(asyncio.CancelledError):

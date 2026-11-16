@@ -68,7 +68,7 @@ async def consume_input_queue(input_queue):
             input_queue.task_done()
 
 
-async def run_receiver(input_queue):
+async def run_receiver(input_queue, status_queue=None):
     # Import Bleak only when running the receiver so this module remains
     # importable for tests and other game-side consumers without BLE hardware.
     from bleak import BleakClient, BleakScanner
@@ -84,11 +84,15 @@ async def run_receiver(input_queue):
                     INPUT_UUID,
                     make_handler(client, input_queue, player_id=player_id),
                 )
+                if status_queue is not None:
+                    status_queue.put_nowait((player_id, True))
                 while client.is_connected:
                     await asyncio.sleep(0.1)
         except Exception as error:
             print("BLE error for", player_id, ":", error)
         finally:
+            if status_queue is not None:
+                status_queue.put_nowait((player_id, False))
             if connection_tasks.get(player_id) is task:
                 del connection_tasks[player_id]
             print("Disconnected", player_id, "retrying discovery...")
