@@ -51,7 +51,7 @@ class TelemetryRecorder:
                 if self.match_id is None:
                     self.match_id = uuid.uuid4().hex
                     self.connection.execute(
-                        "INSERT IINTO matches(id, started_at, player1, player2) VALUES(?, ?, ?, ?)",
+                        "INSERT INTO matches(id, started_at, player1, player2) VALUES(?, ?, ?, ?)",
                         (self.match_id, self.clock(), str(names[0]), str(names[1])),
                     )
                 self.round_started = self.clock()
