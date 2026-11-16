@@ -17,7 +17,7 @@ import pygame
 import asyncio
 
 WIDTH, HEIGHT = 1024, 600
-FPS = 30
+FPS = 60
 CONFIG_PATH = Path(__file__).resolve().parent / "config" / "players.json"
 
 BG = (5, 10, 22)
