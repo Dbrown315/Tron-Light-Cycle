@@ -392,6 +392,8 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 )
         return cells
 
+    fps_start = time.monotonic()
+    fps_frames = 0
     try:
         while running:
             # Let Bleak scanning, notifications and reconnection progress.
@@ -442,6 +444,15 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 elif event_info.kind == "MATCH_FINISHED":
                     status = "MATCH WINNER: {}! Select NEW MATCH.".format(players[event_info.match_winner]["name"])
             session.show(now)
+            fps_frames += 1
+            fps_elapsed = time.monotonic() - fps_start
+
+            if fps_elapsed >= 5.0:
+                measured_fps = fps_frames / fps_elapsed
+                print(f"Matrix updates/sec: {measured_fps:.1f}")
+
+                fps_frames = 0
+                fps_start = time.monotonic()
             sw, sh = screen.get_size()
             # Window size: 1024x600
             canvas = pygame.Surface((WIDTH, HEIGHT))
