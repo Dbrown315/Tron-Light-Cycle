@@ -313,7 +313,7 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
         return result
 
     def dispatch_action(action):
-        nonlocal players, active_name, name_editor, name_editor, stats_panel, status, running
+        nonlocal players, active_name, name_editor, stats_panel, status, running
         kind = action[0]
         if kind in ("leaderboard", "telemetry"):
             stats_panel = kind
