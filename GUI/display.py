@@ -33,7 +33,7 @@ BORDER = (35, 76, 105)
 GREEN = (93, 255, 183)
 AMBER = (255, 205, 89)
 
-# Game Characters
+# Game Characters (Optional)
 CHARACTERS = ["Spider", "Dino", "Ladybird", "Tiger", "Dragonfly", "Ant", "Butterfly"]
 
 # Game Colors: Blue / Orange (defaults)
@@ -289,9 +289,9 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
             )
         result.extend(
             [
-                Button((32, 483, 166, 48), "START", ("start",), CYAN, (7, 54, 72), 17),
+                Button((32, 483, 145, 48), "START", ("start",), CYAN, (7, 54, 72), 17),
                 Button(
-                    (210, 483, 166, 48),
+                    (187, 483, 145, 48),
                     "NEXT ROUND",
                     ("play_again",),
                     GREEN,
@@ -299,13 +299,13 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                     15,
                 ),
                 Button(
-                    (388, 483, 166, 48), "RESTART", ("restart",), AMBER, PANEL_ALT, 17
+                    (342, 483, 125, 48), "RESTART", ("restart",), AMBER, PANEL_ALT, 16
                 ),
                 Button(
-                    (464, 483, 106, 48), "RANKS", ("leaderboard",), CYAN, PANEL_ALT, 14
+                    (477, 483, 100, 48), "RANKS", ("leaderboard",), CYAN, PANEL_ALT, 14
                 ),
                 Button(
-                    (578, 483, 102, 48), "STATS", ("telemetry",), GREEN, PANEL_ALT, 14
+                    (587, 483, 95, 48), "STATS", ("telemetry",), GREEN, PANEL_ALT, 14
                 ),
                 Button((840, 483, 148, 48), "EXIT", ("exit",), PINK, (54, 17, 37), 17),
             ]
@@ -728,8 +728,8 @@ async def main(simulate=False, ticks=8, display=0, ble=False):
                 pygame.transform.scale(preview, preview_rect.size), preview_rect
             )
             pygame.draw.rect(canvas, BORDER, preview_rect, 1)
-            draw_fitted_text(canvas, "MATRIX", small_font, MUTED, (750, 487, 80, 18))
-            draw_fitted_text(canvas, "PREVIEW", small_font, MUTED, (750, 506, 80, 18))
+            draw_fitted_text(canvas, "MATRIX", small_font, MUTED, (760, 487, 70, 18))
+            draw_fitted_text(canvas, "PREVIEW", small_font, MUTED, (760, 506, 70, 18))
             draw_fitted_text(
                 canvas,
                 "WASD: P1     ARROWS: P2     SPACE: NEXT    ESC: EXIT",
