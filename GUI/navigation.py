@@ -4,7 +4,14 @@
 # Purpose: Independent Player(P1/P2) controller focus for GUI.
 
 PLAYERS = {"P1": 0, "P2": 1}
-SHARED = [("start",), ("play_again",), ("restart",), ("exit",)]
+SHARED = [
+    ("start",),
+    ("play_again",),
+    ("restart",),
+    ("leaderboard",),
+    ("telemetry",),
+    ("exit",),
+]
 
 
 class MenuNavigation:
@@ -52,8 +59,8 @@ class MenuNavigation:
         if button == "LEFT":
             col = max(0, col - 1)
         elif button == "RIGHT":
-            col = min(3 if row == 2 else 1, col + 1)
-        col = min(col, 3 if row == 2 else 1)
+            col = min(len(SHARED) - 1 if row == 2 else 1, col + 1)
+        col = min(col, len(SHARED) - 1 if row == 2 else 1)
         if row == 0:
             col = 0
         self.positions[player] = row, col
