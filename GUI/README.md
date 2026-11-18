@@ -1,4 +1,4 @@
-# Tron Light Cycle GUI Prototype - Part 1
+# Tron Light Cycle (GUI) - Part 1
 
 A first-stage Pygame GUI prototype for Raspberry Pi 5 and the 52Pi EP-0170 7-inch HDMI display.
 
