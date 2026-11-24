@@ -23,7 +23,11 @@ python3 -m unittest discover -s Tests -v
 python3 GUI/display.py --simulate --display 1
 python3 GUI/display.py --simulate --display 1 --ble
 python3 GUI/display.py --ticks 8 --display 1 --ble
-#python3 -m unittest discover -s Tests -p "test_telemetry.py" -v
+```
+
+```bash
+python3 -m pip install -e .
+python3 -m unittest discover -s Tests -v
 ```
 
 The simulator automatically scans for both BLE controllers while remaining
