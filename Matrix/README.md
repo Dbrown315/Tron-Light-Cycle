@@ -25,6 +25,11 @@ python3 GUI/display.py --simulate --display 1 --ble
 python3 GUI/display.py --ticks 8 --display 1 --ble
 ```
 
+```bash
+python3 -m pip install -e .
+python3 -m unittest discover -s Tests -v
+```
+
 The simulator automatically scans for both BLE controllers while remaining
 playable with the keyboard. `TRON-P1` controls Player 1 and `TRON-P2` controls
 Player 2; these advertised names are configured in `Pi/settings.env` and each

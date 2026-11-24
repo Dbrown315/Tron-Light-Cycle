@@ -1,0 +1,21 @@
+# 
+# File: pyproject.toml
+# Group: Group 9
+# Purpose: Setup build system configurations and package tools.
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tron-light-cycle"
+version = "0.1.0"
+description = "Tron Light Cycle game for Raspberry Pi"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+package-dir = {"" = "Matrix"}
+
+[tool.setuptools.packages.find]
+where = ["Matrix"]
+include = ["Game*"]
